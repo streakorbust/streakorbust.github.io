@@ -1,0 +1,15 @@
+{
+  "name": "Streak or Bust",
+  "short_name": "Streak or Bust",
+  "description": "Push-your-luck card game. Play online with friends or pass one phone around.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#c4ecfa",
+  "theme_color": "#8fd8f2",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

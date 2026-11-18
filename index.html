@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Streak or Bust</title>
+<meta name="theme-color" content="#8fd8f2">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Streak or Bust">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+  <div id="heat"></div>
+  <!-- SETUP -->
+  <section id="setup" class="screen active">
+    <div class="logo">
+      <div class="mark" aria-hidden="true">
+        <svg viewBox="0 0 120 120">
+          <defs>
+            <linearGradient id="mkBg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4f8cff"/><stop offset=".55" stop-color="#6a5cf0"/><stop offset="1" stop-color="#b44fe0"/></linearGradient>
+            <linearGradient id="mkBolt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffcf3f"/><stop offset="1" stop-color="#ff7a2f"/></linearGradient>
+            <linearGradient id="mkShine" x1="0" y1="0" x2="1" y2="0"><stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".8"/><stop offset=".7" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            <clipPath id="mkCardClip"><rect x="40" y="24" width="50" height="70" rx="10"/></clipPath>
+          </defs>
+          <rect x="4" y="4" width="112" height="112" rx="30" fill="url(#mkBg)"/>
+          <g transform="rotate(-14 50 64)"><rect x="28" y="30" width="50" height="70" rx="10" fill="#3fd1c2" stroke="rgba(255,255,255,.55)" stroke-width="2"/></g>
+          <g class="mk-card" transform="rotate(9 65 59)">
+            <rect x="40" y="24" width="50" height="70" rx="10" fill="#fff"/>
+            <path class="mk-bolt" d="M70 33 50 62h13l-6 24 21-31H64l6-22Z" fill="url(#mkBolt)" stroke="#e8601f" stroke-width="1.5" stroke-linejoin="round"/>
+            <g clip-path="url(#mkCardClip)"><rect class="mk-shine" x="40" y="24" width="50" height="70" fill="url(#mkShine)"/></g>
+          </g>
+        </svg>
+      </div>
+      <h1>Streak <span>or Bust</span></h1>
+      <p class="tag">Keep the streak alive. Don't double up.</p>
+    </div>
+
+    <div id="recap" class="recap hidden"></div>
+
+    <div class="seg modes" id="modeSeg"><button data-m="online" class="on">Play online</button><button data-m="local">One phone</button></div>
+
+    <div id="onlinePane">
+      <button id="btnRejoin" class="resume hidden"></button>
+      <div class="panel">
+        <div class="nameIn me"><span class="sw"></span><input id="myName" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name"></div>
+        <button id="btnCreate" class="btn primary big">Create a room</button>
+        <div class="or"><span>or join friends</span></div>
+        <div class="joinrow"><input id="joinCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code"><button id="btnJoin" class="btn primary">Join</button></div>
+      </div>
+    </div>
+
+    <div id="localPane" class="hidden">
+    <button id="btnResume" class="resume hidden" aria-label="Continue saved game">Continue saved game</button>
+      <button id="btnEndSaved" class="btn ghost end-saved hidden">End this game</button>
+    <div class="panel">
+      <div class="row between">
+        <label>Players</label>
+        <div class="stepper">
+          <button id="pMinus" aria-label="Fewer players">−</button>
+          <span id="pCount">2</span>
+          <button id="pPlus" aria-label="More players">+</button>
+        </div>
+      </div>
+      <div id="names"></div>
+      <div class="row between">
+        <label>Play to</label>
+        <div class="seg" id="targetSeg">
+          <button data-v="100">100</button><button data-v="150">150</button><button data-v="200" class="on">200</button><button data-v="300">300</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="btnStart" class="btn primary big">Deal the cards</button>
+    </div>
+    <button id="btnRules" class="btn link">How to play</button>
+  </section>
+
+  <!-- ONLINE LOBBY -->
+  <section id="lobby" class="screen">
+    <div class="lb-top"><button id="lbLeave" class="btn link">‹ Leave</button></div>
+    <div class="lb-code"><small>Room code</small><b id="lbCode">----</b><span id="lbConn"></span></div>
+    <button id="lbShare" class="btn ghost">Invite friends</button>
+    <div class="panel">
+      <div class="row between"><label>Players</label><span class="lb-count" id="lbCount"></span></div>
+      <div id="lbPlayers"></div>
+      <div class="row between host-only"><label>Play to</label>
+        <div class="seg" id="lbTarget"><button data-v="100">100</button><button data-v="150">150</button><button data-v="200" class="on">200</button><button data-v="300">300</button></div>
+      </div>
+    </div>
+    <p id="lbNote" class="lb-note"></p>
+    <button id="lbStart" class="btn primary big host-only">Start game</button>
+  </section>
+
+  <!-- TABLE -->
+  <section id="table" class="screen">
+    <header class="topbar">
+      <div class="tb-left"><span id="roundLbl">Round 1</span><span class="dot">·</span><span id="targetLbl">to 200</span></div>
+      <div id="turnPill" class="hidden"></div>
+      <button id="btnMenu" class="iconbtn" aria-label="Menu">⋯</button>
+    </header>
+    <div class="tablebody">
+      <aside id="rail"></aside>
+      <main id="stage">
+        <div id="seats"></div>
+        <div id="reveal"></div>
+        <div id="stamp"></div>
+      </main>
+    </div>
+    <footer id="controls">
+      <button id="btnFlip" class="deckbtn" aria-label="Flip a card"><i class="charge"></i><span>Flip<small id="deckCount"></small></span></button>
+      <button id="btnSkip" class="skipbtn"><b>Skip</b><small id="skipSub">1 per round</small></button>
+      <button id="btnClose" class="closebtn"><b>Close</b></button>
+    </footer>
+  </section>
+
+  <div id="banner"></div>
+  <div id="badge"></div>
+  <button id="undo" class="hidden"><span>Undo close</span><i></i></button>
+  <div id="toast"></div>
+  <div id="waitNote"></div>
+  <div id="modalWrap" class="hidden"><div id="modal"></div></div>
+  <canvas id="fx"></canvas>
+</div>
+<script src="engine.js" defer></script>
+<script src="net.js" defer></script>
+<script src="app.js" defer></script>
+</body>
+</html>
