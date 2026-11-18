@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --sky1: #b6e4f8;
   --sky2: #dcf2fb;
   --sky3: #f2fafe;
@@ -16,7 +16,7 @@
   --hot-d: #db5021;
   --gold: #f5b301;
   --goldInk: #b97f00;
-  --ice: #5563e6;
+  --ice: #3f6fe0;
   --good: #1aa863;
   --good-d: #15914f;
   --bad: #e5384b;
@@ -129,11 +129,11 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .card .ic { position: absolute; left: 50%; top: 50%; width: 70cqw; height: 70cqw; transform: translate(-50%, -50%); }
 .card .ic svg { width: 100%; height: 100%; display: block; }
 
-/* Bonus cards teal; actions: Lock indigo, Rush green, Shield violet. */
+/* Bonus cards teal; actions: Chill blue, Hat Trick green, Lifeline violet. */
 .card.mod, .card.x2 { background: linear-gradient(165deg, #3fd1c2, #12a091); }
 .card.mod .big, .card.x2 .big { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 750; font-size: 40cqw; letter-spacing: -.04em; color: #fff; text-shadow: 0 .6cqw 1.6cqw rgba(0, 70, 64, .3); }
 .card.x2 .big { font-size: 44cqw; }
-.card.lock { background: linear-gradient(165deg, #8e9bff, #5563e6); }
+.card.lock { background: linear-gradient(165deg, #7fb2ff, #3f6fe0); }
 .card.rush { background: linear-gradient(165deg, #7fe3a6, #26b468); }
 .card.shield { background: linear-gradient(165deg, #cf9cff, #9550e0); }
 
@@ -163,7 +163,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #stamp.bust { background: var(--bad); }
 #stamp.sweep { background: linear-gradient(135deg, #3fd1c2, #5563e6); }
 #stamp.saved { background: #9550e0; }
-#stamp.lock { background: #5563e6; }
+#stamp.lock { background: #3f6fe0; }
 #stamp.rush { background: #26b468; }
 @keyframes stamp {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.9); }
@@ -174,7 +174,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 .flashred::after, .flashlock::after, .flashgold::after { content: ""; position: fixed; inset: 0; pointer-events: none; animation: flash .7s ease-out forwards; z-index: 40; }
 .flashred::after { background: radial-gradient(circle, transparent 45%, rgba(229, 56, 75, .25)); }
-.flashlock::after { background: radial-gradient(circle, transparent 40%, rgba(85, 99, 230, .28)); }
+.flashlock::after { background: radial-gradient(circle, transparent 40%, rgba(63, 111, 224, .28)); }
 .flashgold::after { background: radial-gradient(circle, transparent 40%, rgba(245, 179, 1, .28)); }
 @keyframes flash { from { opacity: 1; } to { opacity: 0; } }
 
@@ -304,7 +304,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .seat.turn { border-color: var(--gold); background: linear-gradient(180deg, #fff8e6, #fff 55%); box-shadow: 0 0 0 4px rgba(245, 179, 1, .15), var(--shadow); }
 .seat.focus { border-color: var(--line2); }
 .seat.out { background: rgba(255, 255, 255, .75); }
-.seat.locked { border-color: var(--ice); background: linear-gradient(180deg, #eceeff, #fff 55%); }
+.seat.locked { border-color: var(--ice); background: linear-gradient(180deg, #ebf2ff, #fff 55%); }
 .seat.busted .seat-cards .card { filter: grayscale(.9) opacity(.6); }
 .seat-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .seat-name { flex: 1 1 0; display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 26px; font-weight: 700; font-size: 16px; color: var(--pc); }
@@ -367,10 +367,10 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   .seat-tot { font-size: 18px; padding: 2px 8px; }
 }
 
-/* ---------- full-screen action picker (Lock / Rush / spare Shield) ---------- */
+/* ---------- full-screen action picker (Chill / Hat Trick / spare Lifeline) ---------- */
 #modal.picker { max-width: none; height: 100%; max-height: 100%; border-radius: 0; display: flex; flex-direction: column; gap: 14px;
   padding: calc(var(--safe-t) + 22px) 18px calc(var(--safe-b) + 18px); box-shadow: none; animation: fade .2s ease-out; }
-#modal.picker.lock { background: radial-gradient(120% 60% at 50% 0%, #b9c0ff, #eceeff 55%, #fff); }
+#modal.picker.lock { background: radial-gradient(120% 60% at 50% 0%, #b8d3ff, #ebf2ff 55%, #fff); }
 #modal.picker.rush { background: radial-gradient(120% 60% at 50% 0%, #a6efc3, #e8fbf0 55%, #fff); }
 #modal.picker.shield { background: radial-gradient(120% 60% at 50% 0%, #e2c4ff, #f6edff 55%, #fff); }
 .pk-hero { flex: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; }
@@ -379,7 +379,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 @keyframes pkcard { from { transform: rotateY(180deg) rotate(-18deg) scale(.4); opacity: 0; } }
 @keyframes pkfloat { 50% { transform: translateY(-7px) rotate(-2deg); } }
 #modal.picker h2 { margin: 0; font-size: 32px; font-weight: 800; letter-spacing: -.02em; }
-#modal.picker.lock h2 { color: #3b47c4; }
+#modal.picker.lock h2 { color: #2c58c4; }
 #modal.picker.rush h2 { color: #17844a; }
 #modal.picker.shield h2 { color: #7a35c4; }
 #modal.picker p { margin: 0; max-width: 34ch; font-size: 15px; }

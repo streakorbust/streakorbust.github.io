@@ -50,11 +50,14 @@
 
   // ---------------- card art ----------------
   const ICONS = {
-    lock: `<svg viewBox="0 0 64 64"><path d="M21 29v-7a11 11 0 0 1 22 0v7" fill="none" stroke="#fff" stroke-width="6" stroke-linecap="round"/><rect x="12" y="27" width="40" height="30" rx="8" fill="#fff"/><circle cx="32" cy="39.5" r="4.6" fill="#4552d6"/><path d="M32 41v7.5" stroke="#4552d6" stroke-width="4.2" stroke-linecap="round"/></svg>`,
-    rush: `<svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17l12 15-12 15" opacity=".5"/><path d="M25 17l12 15-12 15" opacity=".78"/><path d="M41 17l12 15-12 15"/></svg>`,
-    shield: `<svg viewBox="0 0 64 64"><path d="M32 5 53 12.5V30c0 13.5-8.8 22.4-21 28.5C19.8 52.4 11 43.5 11 30V12.5z" fill="#fff"/><path d="M22.5 31.5l7 7L42 24" fill="none" stroke="#8441d4" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+    // Chill: a thermometer reading cold
+    lock: `<svg viewBox="0 0 64 64"><path d="M25 11a7 7 0 0 1 14 0v25a12 12 0 1 1-14 0z" fill="#fff"/><circle cx="32" cy="45.5" r="6.5" fill="#2f5fd0"/><path d="M32 45V33" stroke="#2f5fd0" stroke-width="5" stroke-linecap="round"/><path d="M45 14h8M45 22h5M45 30h8" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/></svg>`,
+    // Hat Trick: a top hat with three sparkles
+    rush: `<svg viewBox="0 0 64 64"><path d="M17 22h30v24H17z" fill="#fff"/><rect x="17" y="36" width="30" height="6" fill="#1f9d5a" opacity=".65"/><rect x="6" y="44" width="52" height="10" rx="5" fill="#fff"/><path d="M14 5L15.8 9.2L20 11L15.8 12.8L14 17L12.2 12.8L8 11L12.2 9.2Z M32 1L34.1 5.9L39 8L34.1 10.1L32 15L29.9 10.1L25 8L29.9 5.9Z M50 5L51.8 9.2L56 11L51.8 12.8L50 17L48.2 12.8L44 11L48.2 9.2Z" fill="#fff"/></svg>`,
+    // Lifeline: a life ring
+    shield: `<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="19" fill="none" stroke="#fff" stroke-width="11"/><circle cx="32" cy="32" r="19" fill="none" stroke="#8441d4" stroke-width="11" stroke-dasharray="9.5 20.35" stroke-dashoffset="4.75" opacity=".85"/><circle cx="32" cy="32" r="24.5" fill="none" stroke="#fff" stroke-width="1.5" opacity=".6"/></svg>`,
   };
-  const ACTION_NAME = { lock: 'Lock', rush: 'Rush', shield: 'Shield' };
+  const ACTION_NAME = { lock: 'Chill', rush: 'Hat Trick', shield: 'Lifeline' };
 
   function cardHTML(c, cls = '') {
     switch (c.kind) {
@@ -128,9 +131,9 @@
     sweep: ['🌟', 'Clean Sweep', 'Collected 7 different numbers'],
     greedy: ['🤑', 'Greedy', 'Busted holding 6 numbers'],
     nerves: ['😎', 'Nerves of Steel', 'Closed holding 6 numbers'],
-    ice: ['🔒', 'Lockdown', 'Locked a rival sitting on 40+'],
-    saved: ['🛡️', 'Saved by the Bell', 'A Shield saved you'],
-    survivor: ['💪', 'Survivor', 'Made it through a Rush'],
+    ice: ['🧊', 'Cold Shoulder', 'Chilled a rival sitting on 40+'],
+    saved: ['🛟', 'Saved by the Bell', 'A Lifeline saved you'],
+    survivor: ['💪', 'Survivor', 'Made it through a Hat Trick'],
     bigbank: ['💰', 'Big Bank', 'Scored 60+ in one round'],
     zero: ['🎯', 'Zero Hero', 'Won a round holding the 0'],
     comeback: ['🚀', 'Comeback Kid', 'Won after trailing by 50+'],
@@ -185,7 +188,7 @@
       }
       case 'saved':
         award(ev.p, 'saved');
-        moment(25 + breakdown(P[ev.p]).score, `🛡️ A Shield saved ${nm(ev.p)}`);
+        moment(25 + breakdown(P[ev.p]).score, `🛟 A Lifeline saved ${nm(ev.p)}`);
         break;
       case 'sweep':
         award(ev.p, 'sweep');
@@ -195,7 +198,7 @@
         const pts = breakdown(P[ev.t]).score;
         if (ev.t !== ev.p) {
           if (pts >= 40) award(ev.p, 'ice');
-          moment(pts * 1.1, `🔒 ${nm(ev.p)} locked ${nm(ev.t)} at ${pts}`);
+          moment(pts * 1.1, `🧊 ${nm(ev.p)} chilled ${nm(ev.t)} at ${pts}`);
         }
         break;
       }
@@ -325,7 +328,7 @@
   function statusTag(p) {
     if (p.status === 'busted') return '<span class="tag-s bust">BUST</span>';
     if (p.sweep) return '<span class="tag-s closed">SWEEP</span>';
-    if (p.status === 'locked') return '<span class="tag-s locked">LOCKED</span>';
+    if (p.status === 'locked') return '<span class="tag-s locked">CHILLED</span>';
     if (p.status === 'stayed') return '<span class="tag-s closed">CLOSED</span>';
     if (p.skipUsed) return '<span class="tag-s skip">SKIPPED</span>';
     return '';
@@ -500,7 +503,7 @@
       case 'place':
         if (dealing) flyToChip(ev.card, ev.p); else hideReveal(true);
         render(s, ev.p, ev.card.id);
-        if (ev.card.kind === 'shield') toast(`${nm(ev.p)} is holding a Shield`);
+        if (ev.card.kind === 'shield') toast(`${nm(ev.p)} is holding a Lifeline`);
         await sleep(ev.card.kind === 'num' ? 300 : 500);
         break;
       case 'bust': {
@@ -518,8 +521,8 @@
         break;
       }
       case 'saved':
-        stamp('SAVED!', 'saved', 'Shield used up', ev.p);
-        toast(`A Shield saved ${nm(ev.p)}`);
+        stamp('SAVED!', 'saved', 'Lifeline used up', ev.p);
+        toast(`A Lifeline saved ${nm(ev.p)}`);
         flash('gold');
         await sleep(700);
         hideReveal(true);
@@ -534,7 +537,7 @@
         await sleep(2100);
         break;
       case 'setAside':
-        toast(`${ACTION_NAME[ev.card.kind]} waits until the Rush is over`);
+        toast(`${ACTION_NAME[ev.card.kind]} waits until the Hat Trick is over`);
         await sleep(800);
         hideReveal(true);
         await sleep(250);
@@ -549,12 +552,12 @@
         hideReveal(true);
         focusP = ev.t;
         render(s, ev.t);
-        stamp('LOCKED', 'lock', null, ev.t);
+        stamp('CHILLED', 'lock', null, ev.t);
         flash('ice');
         const pts = breakdown(s.players[ev.t]).score;
         toast(ev.auto && ev.t === ev.p
-          ? `${nm(ev.t)} is the only one left and has to take it. Locked in with ${pts}`
-          : ev.t === ev.p ? `${nm(ev.t)} locked themselves in with ${pts}` : `${nm(ev.p)} locked ${nm(ev.t)}, who keeps ${pts}`, 2400);
+          ? `${nm(ev.t)} is the only one left and has to take it. Chilled with ${pts}`
+          : ev.t === ev.p ? `${nm(ev.t)} chilled themselves with ${pts}` : `${nm(ev.p)} chilled ${nm(ev.t)}, who keeps ${pts}`, 2400);
         await sleep(1500);
         break;
       }
@@ -562,10 +565,10 @@
         hideReveal(true);
         focusP = ev.t;
         render(s, ev.t);
-        stamp('RUSH!', 'rush', '3 cards in a row', ev.t);
+        stamp('HAT TRICK!', 'rush', '3 cards in a row', ev.t);
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take 3 cards!`
-          : ev.t === ev.p ? `${nm(ev.t)} rushes: 3 cards in a row!` : `${nm(ev.p)} makes ${nm(ev.t)} take 3 cards!`, 2200);
+          : ev.t === ev.p ? `${nm(ev.t)} takes the Hat Trick: 3 cards in a row!` : `${nm(ev.p)} makes ${nm(ev.t)} take 3 cards!`, 2200);
         await sleep(1400);
         break;
       case 'rushDone':
@@ -574,7 +577,7 @@
       case 'giveShield':
         hideReveal(true);
         render(s, ev.t, ev.card.id);
-        toast(`${nm(ev.p)} already had one, so ${nm(ev.t)} gets the Shield`, 2200);
+        toast(`${nm(ev.p)} already had one, so ${nm(ev.t)} gets the Lifeline`, 2200);
         await sleep(1100);
         break;
       case 'discardAction':
@@ -687,16 +690,16 @@
     const s = game.s;
     const who = mode !== 'local' && a.p === mySeat ? 'You' : esc(s.players[a.p].name);
     const how = {
-      lock: "Choose who gets locked in. They keep this round's points and sit out the rest of the round.",
+      lock: "Choose who gets chilled. They keep this round's points and sit out the rest of the round.",
       rush: 'Choose who takes the next 3 cards, one at a time.',
-      shield: 'You can only hold one Shield. Choose who gets this one.',
+      shield: 'You can only hold one Lifeline. Choose who gets this one.',
     }[a.action];
     const opts = a.options.map((i, k) => {
       const p = s.players[i]; const b = breakdown(p);
       const n = p.cards.filter((c) => c.kind === 'num').length;
       return `<button data-i="${i}" style="--pc:${pc(i)}; animation-delay:${0.12 + k * 0.06}s">
         <div class="pk-who"><div class="pn"><span class="pn-t">${esc(p.name)}</span>${i === a.p ? '<span class="you">YOU</span>' : ''}</div>
-        <div class="pm">${n}/7 numbers${p.shield ? ' · has a Shield' : ''}</div></div>
+        <div class="pm">${n}/7 numbers${p.shield ? ' · has a Lifeline' : ''}</div></div>
         <div class="pk-stat rd">+${b.score}</div><div class="pk-stat tot">${p.total}</div></button>`;
     }).join('');
     openModal(`<div class="pk-hero">
@@ -809,15 +812,15 @@
       <li>Example above: (3 + 9) × 2 + 4 = <b>28</b>.</li></ul>
     <h3>Action cards</h3>
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
-    <ul><li><b>Lock</b>: choose a player still in (you can pick yourself). They keep their points and are out for the round.</li>
-      <li><b>Rush</b>: choose a player still in. They take 3 cards in a row. Action cards they get during the Rush wait until it's done.</li>
-      <li><b>Shield</b>: hold it. It cancels one bust: the repeat number and the Shield are both thrown away. You can hold one Shield, so a second one goes to another player.</li>
-      <li>If you're the only player left in the round, you have to use Lock or Rush on yourself.</li></ul>
+    <ul><li><b>Chill</b>: choose a player still in (you can pick yourself). They keep their points and are out for the round.</li>
+      <li><b>Hat Trick</b>: choose a player still in. They take 3 cards in a row. Action cards they get during it wait until all 3 are done.</li>
+      <li><b>Lifeline</b>: hold it. It cancels one bust: the repeat number and the Lifeline are both thrown away. You can hold one Lifeline, so a second one goes to another player.</li>
+      <li>If you're the only player left in the round, you have to use Chill or Hat Trick on yourself.</li></ul>
     <h3>Rounds</h3><ul>
       <li>Everyone gets one card, then turns go around the table. The round ends when nobody is left in, or someone makes a Clean Sweep.</li>
       <li>The game ends after a round where someone reaches the target score. Most points wins. A tie keeps playing.</li></ul>
     <h3>The deck</h3><ul>
-      <li>94 cards: one 0, then as many copies of each number as its value (one 1, two 2s … twelve 12s). One each of +2, +4, +6, +8, +10 and ×2. Three each of Lock, Rush and Shield.</li>
+      <li>94 cards: one 0, then as many copies of each number as its value (one 1, two 2s … twelve 12s). One each of +2, +4, +6, +8, +10 and ×2. Three each of Chill, Hat Trick and Lifeline.</li>
       <li>When the deck runs out, the thrown-away cards are shuffled into a new deck.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
