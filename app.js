@@ -302,7 +302,6 @@
   // Reshuffle, step by step so it's obvious what's happening: the face-up discard pile sits next
   // to the empty deck, the cards turn face down, get riffled twice, and slide over as the new deck.
   async function shuffleAnim(snap) {
-    const total = snap && snap.deck ? snap.deck.length : 0;
     const pool = snap && snap.deck ? snap.deck.filter((c) => c && c.kind) : [];
     const face = (k) => cardHTML(pool.length ? pool[(k * 7) % pool.length] : { kind: 'num', value: 1 + ((k * 5) % 12) });
     const n = 8;
@@ -311,7 +310,7 @@
     box.innerHTML = `<div class="sf-title">The deck is empty.<br>Shuffling the discards…</div>
       <div class="sf-stage">
         <div class="sf-slot left"><span>Discards</span></div>
-        <div class="sf-slot right"><span class="sf-count">Deck: 0 cards</span></div>
+        <div class="sf-slot right"><span>Deck</span></div>
         ${Array.from({ length: n }, (_, k) => `<div class="sf-card">${face(k)}<div class="card back"></div></div>`).join('')}
       </div>`;
     document.body.appendChild(box);
@@ -336,8 +335,7 @@
       c.lastElementChild.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.16 }, { opacity: 1, offset: 0.24 }, { opacity: 1 }], { duration: dur, delay: k * 25, fill: 'both' });
     });
     await sleep(dur * 0.9);
-    box.querySelector('.sf-count').textContent = `Deck: ${total} cards`;
-    box.querySelector('.sf-title').innerHTML = 'New deck ready!';
+    box.querySelector('.sf-title').innerHTML = 'Cards shuffled!';
     box.querySelector('.sf-slot.right').classList.add('full');
     await sleep(700);
     box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, fill: 'forwards' });
@@ -965,6 +963,8 @@
 
   function renderNames() {
     $('#pCount').textContent = prefs.count;
+    $('#pPlus').disabled = prefs.count >= MAX_PLAYERS; // 4 players max
+    $('#pMinus').disabled = prefs.count <= 2;
     const wrap = $('#names');
     wrap.classList.toggle('two-col', prefs.count > 2);
     wrap.innerHTML = Array.from({ length: prefs.count }, (_, i) =>

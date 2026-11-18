@@ -716,3 +716,5 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .sf-card { position: absolute; left: calc(50% - 32px); top: 22px; width: 64px; aspect-ratio: 5 / 7; }
 .sf-card > .card { position: absolute; inset: 0; width: 100%; box-shadow: 0 2px 8px rgba(15, 42, 68, .18); }
 .seg.modes button.on { background: var(--brand); color: #fff; box-shadow: 0 2px 8px rgba(22, 119, 201, .3); }
+.stepper button:disabled { opacity: .3; }
+.lbl-hint { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 4px; }
