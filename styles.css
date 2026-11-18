@@ -716,3 +716,6 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .seg.modes button.on { background: var(--brand); color: #fff; box-shadow: 0 2px 8px rgba(22, 119, 201, .3); }
 .stepper button:disabled { opacity: .3; }
 .lbl-hint { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+
+/* Number cards: one big number, no corner numbers. */
+.card.num .big { font-size: 74cqw; letter-spacing: -.06em; }
