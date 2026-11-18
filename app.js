@@ -49,13 +49,14 @@
   const isMine = (i) => mode === 'local' || i === mySeat;
 
   // ---------------- card art ----------------
+  const arm = (k) => `<g transform="rotate(${k * 60} 32 32)"><path d="M32 32V6M25 12l7 6.5 7-6.5M27.5 21.5l4.5 3.5 4.5-3.5"/></g>`;
   const ICONS = {
-    // Chill: a thermometer reading cold
-    lock: `<svg viewBox="0 0 64 64"><path d="M25 11a7 7 0 0 1 14 0v25a12 12 0 1 1-14 0z" fill="#fff"/><circle cx="32" cy="45.5" r="6.5" fill="#2f5fd0"/><path d="M32 45V33" stroke="#2f5fd0" stroke-width="5" stroke-linecap="round"/><path d="M45 14h8M45 22h5M45 30h8" stroke="#fff" stroke-width="3.5" stroke-linecap="round" opacity=".85"/></svg>`,
-    // Hat Trick: a top hat with three sparkles
-    rush: `<svg viewBox="0 0 64 64"><path d="M17 22h30v24H17z" fill="#fff"/><rect x="17" y="36" width="30" height="6" fill="#1f9d5a" opacity=".65"/><rect x="6" y="44" width="52" height="10" rx="5" fill="#fff"/><path d="M14 5L15.8 9.2L20 11L15.8 12.8L14 17L12.2 12.8L8 11L12.2 9.2Z M32 1L34.1 5.9L39 8L34.1 10.1L32 15L29.9 10.1L25 8L29.9 5.9Z M50 5L51.8 9.2L56 11L51.8 12.8L50 17L48.2 12.8L44 11L48.2 9.2Z" fill="#fff"/></svg>`,
-    // Lifeline: a life ring
-    shield: `<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="19" fill="none" stroke="#fff" stroke-width="11"/><circle cx="32" cy="32" r="19" fill="none" stroke="#8441d4" stroke-width="11" stroke-dasharray="9.5 20.35" stroke-dashoffset="4.75" opacity=".85"/><circle cx="32" cy="32" r="24.5" fill="none" stroke="#fff" stroke-width="1.5" opacity=".6"/></svg>`,
+    // Chill: a snowflake
+    lock: `<svg viewBox="0 0 64 64" fill="none" stroke="#fff" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">${[0, 1, 2, 3, 4, 5].map(arm).join('')}<circle cx="32" cy="32" r="4.5" fill="#2f5fd0" stroke="#fff" stroke-width="3"/></svg>`,
+    // Hat Trick: three cards fanned out, a 3 on the front one
+    rush: `<svg viewBox="0 0 64 64"><g stroke="#1f9d5a" stroke-width="2.2"><rect x="7" y="15" width="24" height="34" rx="5" transform="rotate(-18 19 32)" fill="#d9f7e6"/><rect x="20" y="12" width="24" height="34" rx="5" fill="#eefcf4"/><rect x="33" y="15" width="24" height="34" rx="5" transform="rotate(18 45 32)" fill="#fff"/></g><text x="45" y="40.5" transform="rotate(18 45 32)" text-anchor="middle" font-size="21" font-weight="900" fill="#1f9d5a" font-family="ui-rounded, system-ui, sans-serif">3</text></svg>`,
+    // Lifeline: a heart with a heartbeat line
+    shield: `<svg viewBox="0 0 64 64"><path d="M32 57C10 41 4 31 4 21 4 12 11 6 19 6c6 0 10 3 13 8 3-5 7-8 13-8 8 0 15 6 15 15 0 10-6 20-28 36z" fill="#fff"/><path d="M11 30h12l4-9 6 17 5-12 3 4h12" fill="none" stroke="#8441d4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
   };
   const ACTION_NAME = { lock: 'Chill', rush: 'Hat Trick', shield: 'Lifeline' };
 
