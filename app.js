@@ -1658,8 +1658,8 @@
   };
   $('#btnRules').onclick = showRules;
   $('#btnEndSaved').onclick = () => {
-    openModal(`<h2>End this game?</h2><p>The scores will be lost, and you can set up a new game.</p>
-      <div class="mbtns"><button class="btn pink" id="mYes">End game</button><button class="btn ghost" id="mNo">Keep it</button></div>`, (m) => {
+    openModal(`<h2>End this game and start a new one?</h2><p>The current scores will be lost.</p>
+      <div class="mbtns"><button class="btn pink" id="mYes">End it and start new</button><button class="btn ghost" id="mNo">Keep playing this one</button></div>`, (m) => {
       m.querySelector('#mYes').onclick = () => { store.del(SAVE); game = null; closeModal(); showSetup(); };
       m.querySelector('#mNo').onclick = closeModal;
     });
