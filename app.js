@@ -783,7 +783,7 @@
       const n = p.cards.filter((c) => c.kind === 'num').length;
       return `<button data-i="${i}" style="--pc:${pc(i)}; animation-delay:${0.12 + k * 0.06}s">
         <div class="pk-who"><div class="pn"><span class="pn-t">${esc(p.name)}</span>${i === a.p ? '<span class="you">YOU</span>' : ''}</div>
-        <div class="pm">${n}/7 numbers${p.shields.length ? ` · ${p.shields.length} Lifeline${p.shields.length > 1 ? 's' : ''}` : ''}</div></div>
+        <div class="pm">${n} number${n === 1 ? '' : 's'}${p.shields.length ? ` · ${p.shields.length} Lifeline${p.shields.length > 1 ? 's' : ''}` : ''}</div></div>
         <div class="pk-stat rd">+${b.score}</div><div class="pk-stat tot">${p.total}</div></button>`;
     }).join('');
     openModal(`<div class="pk-hero">
@@ -808,7 +808,7 @@
     const rowsHTML = rows.map((r) => {
       const p = s.players[r.i];
       let detail;
-      if (r.busted) detail = `Busted on a second ${p.bust ? p.bust.value : ''}${r.mods.length ? ` · kept ${r.mods.map((m) => `+${m}`).join(' ')}` : ''}`;
+      if (r.busted) detail = `Busted on another ${p.bust ? p.bust.value : ''}${r.mods.length ? ` · kept ${r.mods.map((m) => `+${m}`).join(' ')}` : ''}`;
       else if (!r.nums.length && !r.mods.length) detail = 'No cards';
       else detail = `${r.nums.join(' + ') || '0'}${r.x2 ? ' ×2' : ''}${r.mods.map((m) => ` + ${m}`).join('')}${r.bonus ? ' + 15 sweep' : ''}`;
       return `<div class="sumrow ${r.after === lead ? 'lead' : ''}" style="--pc:${pc(r.i)}">
@@ -1742,6 +1742,10 @@
 
   // Testing hook: open with ?debug to get window.__deal(names, cardsInDrawOrder).
   if (debug) {
+    // Load any game state straight onto the table (for layout checks).
+    window.__load = (state) => { mode = 'local'; mySeat = null; game = Game.load(state); lastTurnP = null; closeModal(); showScreen('table'); settle(); };
+    window.__summary = () => showSummary();
+    window.__picker = (action) => { const s = game.s; showTarget({ p: 0, action, card: { kind: action }, options: s.players.map((_, i) => i) }); };
     window.__shuffle = () => {
       // Demo with a realistic size: every card that isn't on the table right now.
       const onTable = game ? game.s.players.reduce((n, p) => n + p.cards.length + p.shields.length + (p.bust ? 1 : 0), 0) : 0;
