@@ -723,3 +723,17 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .card.num .big { font-size: 60cqw; letter-spacing: 0; }
 /* Two digits: digits sit a touch closer, nudged so the pair stays dead center. */
 .card.num.two .big { letter-spacing: -.05em; text-indent: -.05em; }
+
+/* ---------- rules: the basics box ---------- */
+.basics { background: var(--soft); border-radius: 14px; padding: 14px 14px 12px; margin: 4px 0 6px; }
+.basics .goal { margin: 0 0 10px; font-size: 18px; font-weight: 600; color: var(--ink) !important; }
+.steps3 { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.steps3 li { display: flex; align-items: flex-start; gap: 10px; margin: 0; color: var(--ink); font-size: 15.5px; }
+.steps3 .n { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-size: 13px; font-weight: 800; margin-top: 1px; }
+.bust-ex { margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: #fff; border: 1.5px solid rgba(229, 56, 75, .3); }
+.bust-ex .minis { align-items: center; margin: 0 0 6px; }
+.bust-ex .plus { font-weight: 800; color: var(--muted); padding: 0 2px; }
+.bust-ex p { margin: 0; font-size: 14px; }
+.rules .card.bustcard { box-shadow: 0 0 0 2.5px var(--bad), 0 0 12px rgba(229, 56, 75, .45); }
+.basics .trick { margin: 12px 0 0; font-size: 14px; font-style: italic; }
+.basics .goal small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 2px; }

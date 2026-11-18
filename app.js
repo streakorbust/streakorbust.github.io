@@ -877,39 +877,47 @@
     requestAnimationFrame(tick);
   }
 
+  const N = (v) => ({ kind: 'num', value: v });
   const RULES_HTML = `<h2>How to play</h2><div class="rules">
-    <p class="lead">Flip cards and try to collect as many different numbers as you can. Flip a number you already have and you bust. First to the target score wins.</p>
-    <h3>Your turn</h3><ul>
-      <li><b>Flip</b> to take the next card.</li>
-      <li><b>Close</b> to lock in your points and sit out the rest of the round. Nobody can hit you with action cards after that. Tapped it by accident? You have 5 seconds to undo.</li>
-      <li><b>Skip</b> to pass without flipping. You can do this once a round, and you stay in. You can't skip if you're the last one left.</li></ul>
-    <h3>Busting</h3><ul>
-      <li>If you flip a number you already have, you bust. You lose your numbers and your ×2 for the round, but you still keep your + cards.</li></ul>
-    <h3>Clean Sweep</h3><ul>
-      <li>Get 7 different numbers and the round ends right away. You get an extra <b>15 points</b>.</li></ul>
+    <div class="basics">
+      <p class="goal">🏆 First to <b>200 points</b> wins.<small> Or pick your own target.</small></p>
+      <ol class="steps3">
+        <li><span class="n">1</span><span>On your turn, <b>Flip</b> a card. Each new number adds points.</span></li>
+        <li><span class="n">2</span><span>Flip a number you <b>already have</b> and you <b>bust</b>. You lose this round's numbers.</span></li>
+        <li><span class="n">3</span><span><b>Close</b> any time to stop and keep your points for the round.</span></li>
+      </ol>
+      <div class="bust-ex">
+        <div class="minis">${cardHTML(N(3))}${cardHTML(N(7))}${cardHTML(N(10))}<span class="plus">+</span>${cardHTML(N(7), 'bustcard')}</div>
+        <p>You have 3, 7 and 10. You flip another 7, so you bust.</p>
+      </div>
+      <p class="trick">The more you flip, the more points you can get, but the bigger the chance of busting. Know when to stop!</p>
+    </div>
+
     <h3>Scoring</h3>
-    <div class="minis">${cardHTML({ kind: 'num', value: 3 })}${cardHTML({ kind: 'num', value: 9 })}${cardHTML({ kind: 'x2' })}${cardHTML({ kind: 'mod', value: 4 })}</div>
-    <ul><li>Add up your numbers, double them if you have a ×2, then add your + cards. The ×2 only doubles number cards, never your + cards.</li>
-      <li>So the hand above is worth (3 + 9) × 2 + 4 = <b>28</b>.</li></ul>
+    <div class="minis">${cardHTML(N(3))}${cardHTML(N(9))}${cardHTML({ kind: 'x2' })}${cardHTML({ kind: 'mod', value: 4 })}</div>
+    <ul><li>Add up your numbers. A <b>×2</b> doubles your numbers only, not your + cards. Then add your <b>+ cards</b>.</li>
+      <li>So this hand is (3 + 9) × 2 + 4 = <b>28</b>.</li>
+      <li>If you bust, you still keep your + cards.</li>
+      <li><b>Clean Sweep</b>: get 7 different numbers and the round ends right away, with <b>+15</b> for you.</li></ul>
+
     <h3>Action cards</h3>
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
-    <ul><li><b>Chill</b>: pick anyone who's still in, including yourself. They keep their points but they're done for the round.</li>
-      <li><b>Hat Trick</b>: pick anyone who's still in. They have to flip 3 cards in a row. If they flip an action card along the way, it waits until all 3 are done.</li>
-      <li><b>Lifeline</b>: keep it. The next time you'd bust, it saves you, and that Lifeline and the repeat number go to the discard pile. Keep every Lifeline you draw. Each one saves you once.</li>
-      <li>If you're the only one left in the round, you have to use Chill or Hat Trick on yourself.</li></ul>
-    <h3>How a round works</h3><ul>
-      <li>Everyone gets one card to start, then you take turns around the table. The round is over once everyone has closed, busted or been chilled, or as soon as someone gets a Clean Sweep.</li>
-      <li>When someone hits the target score at the end of a round, the game is over and the highest score wins. If it's a tie, keep playing.</li></ul>
+    <ul><li><b>Chill</b>: pick a player who's still in, including yourself. They keep their points but they're done for the round.</li>
+      <li><b>Hat Trick</b>: pick a player who's still in. They have to flip 3 cards in a row.</li>
+      <li><b>Lifeline</b>: keep it. It saves you from one bust. Keep every Lifeline you draw.</li>
+      <li>If you're the only one left in the round, Chill and Hat Trick go to you.</li></ul>
+
+    <h3>More to know</h3><ul>
+      <li><b>Skip</b>: pass your turn without flipping, once per round.</li>
+      <li><b>Undo</b>: tapped Close by mistake? You have 5 seconds to take it back.</li>
+      <li>Everyone gets one card to start. The round ends when everyone has closed, busted or been chilled.</li>
+      <li>When someone reaches the target at the end of a round, the highest score wins. A tie keeps playing.</li>
+      <li>The deck has 94 cards. When it runs out, the discards get shuffled into a new deck.</li></ul>
+
     <h3>Playing online</h3><ul>
-      <li>If your phone drops out, open the app again and tap <b>Rejoin</b>. Your seat will be waiting.</li>
-      <li>While you're gone, a bot plays your turns so nobody has to wait. You'll see a <b>BOT</b> tag on your seat.</li>
-      <li>When you come back you're marked <b>Rejoining</b>, and you take over again on your next turn.</li>
-      <li>If you're gone for more than 3 minutes, you sit out until you're back. Your score stays where it was, and you're dealt back in the next round.</li>
-      <li>The host's phone runs the game, so if the host leaves, everyone waits for them to come back.</li></ul>
-    <h3>The deck</h3><ul>
-      <li>There are 94 cards. Number cards go from 0 to 12, and each number has as many copies as its value: one 1, two 2s, all the way up to twelve 12s, plus a single 0.</li>
-      <li>There's one each of +2, +4, +6, +8, +10 and ×2, and three each of Chill, Hat Trick and Lifeline.</li>
-      <li>When the deck runs out, the discard pile gets shuffled to make a new one.</li></ul>
+      <li>If you drop out, a bot plays for you until you're back. Tap <b>Rejoin</b> to take over on your next turn.</li>
+      <li>Gone more than 3 minutes? You sit out until you return. Your score stays put.</li>
+      <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
