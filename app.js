@@ -1561,6 +1561,34 @@
     render(game.s, +chip.dataset.i);
   });
 
+  // ---------------- install app ----------------
+  // Android / desktop Chrome: use the browser's own install prompt. iPhone: there's no prompt,
+  // so show the two taps it takes in Safari. Hidden once the app is installed.
+  const installed = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  let installEvt = null;
+  function showInstallBtn() { $('#btnInstall').classList.toggle('hidden', installed() || !(installEvt || isIOS)); }
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; showInstallBtn(); });
+  addEventListener('appinstalled', () => { installEvt = null; showInstallBtn(); toast('Installed! Open Streak or Bust from your home screen'); });
+  const shareIcon = '<svg class="ios-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M7 11H5v10h14V11h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  $('#btnInstall').onclick = async () => {
+    if (installEvt) {
+      installEvt.prompt();
+      try { await installEvt.userChoice; } catch (e) { /* ignore */ }
+      installEvt = null;
+      showInstallBtn();
+      return;
+    }
+    const safari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
+    openModal(`<h2>Install the app</h2><div class="steps">
+      ${safari ? '' : '<p class="step-note">On iPhone, this works best in <b>Safari</b>. Open this page there first.</p>'}
+      <div class="step"><span class="n">1</span><span>Tap the <b>Share</b> button ${shareIcon} at the bottom of the screen.</span></div>
+      <div class="step"><span class="n">2</span><span>Scroll down and tap <b>Add to Home Screen</b>.</span></div>
+      <div class="step"><span class="n">3</span><span>Tap <b>Add</b>. The game shows up on your home screen like any other app.</span></div>
+      </div><div class="mbtns"><button class="btn primary" id="mOk">Got it</button></div>`, (m) => { m.querySelector('#mOk').onclick = closeModal; });
+  };
+  showInstallBtn();
+
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
   }
