@@ -1736,7 +1736,11 @@
 
   // Testing hook: open with ?debug to get window.__deal(names, cardsInDrawOrder).
   if (debug) {
-    window.__shuffle = () => shuffleAnim({ deck: StreakOrBust.buildDeck().slice(0, 61) });
+    window.__shuffle = () => {
+      // Demo with a realistic size: every card that isn't on the table right now.
+      const onTable = game ? game.s.players.reduce((n, p) => n + p.cards.length + p.shields.length + (p.bust ? 1 : 0), 0) : 0;
+      return shuffleAnim({ deck: StreakOrBust.buildDeck().slice(0, 94 - onTable) });
+    };
     window.__deal = (names, cards, target = 200) => {
       const filler = StreakOrBust.buildDeck().filter((c) => c.kind === 'num');
       startGame(names, target, filler.concat(cards.slice().reverse()));
