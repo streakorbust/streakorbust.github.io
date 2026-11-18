@@ -25,6 +25,7 @@
   };
   const prefs = Object.assign({ names: [], count: 2, target: 200, myName: '', mode: 'local', cid: '' }, store.get(PREFS) || {});
   prefs.count = Math.min(prefs.count, MAX_PLAYERS);
+  prefs.target = 200; // every visit starts at the standard 200; pick 100 or Custom per game
   const debug = /[?&]debug\b/.test(location.search);
   // This phone's id in online rooms, so a dropped player gets their seat back when they reconnect.
   // (?debug gives each tab its own id, to test a room with two tabs.)
@@ -1456,7 +1457,7 @@
     }
     members = [{ cid: myCid, name, peer: null, on: true }];
     mySeat = 0;
-    lobbyTarget = prefs.target;
+    lobbyTarget = 200;
     showLobby();
   }
 
