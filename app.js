@@ -299,48 +299,85 @@
     setTimeout(() => { if (tok === revealToken) { el.innerHTML = ''; el.className = ''; } }, 300);
   }
 
-  // Reshuffle, step by step so it's obvious what's happening: the face-up discard pile sits next
-  // to the empty deck, the cards turn face down, get riffled twice, and slide over as the new deck.
+  // Reshuffle, right on the table: the discards appear in the middle, turn face down, get
+  // riffled, then fly into the Flip button, which fills back up as its card count climbs.
   async function shuffleAnim(snap) {
+    const total = snap && snap.deck ? snap.deck.length : 0;
     const pool = snap && snap.deck ? snap.deck.filter((c) => c && c.kind) : [];
     const face = (k) => cardHTML(pool.length ? pool[(k * 7) % pool.length] : { kind: 'num', value: 1 + ((k * 5) % 12) });
-    const n = 8;
+    const stage = ($('#stage') || document.body).getBoundingClientRect();
+    const flip = $('#btnFlip');
+    const fb = flip.getBoundingClientRect();
+    const cx = stage.left + stage.width / 2, cy = stage.top + stage.height * 0.42;
+    const W = Math.min(76, stage.width * 0.2), H = W * 1.4;
+    const n = 8, dur = 1500;
+
     const box = document.createElement('div');
     box.className = 'shufflefx';
-    box.innerHTML = `<div class="sf-title">The deck is empty.<br>Shuffling the discards…</div>
-      <div class="sf-stage">
-        <div class="sf-slot left"><span>Discards</span></div>
-        <div class="sf-slot right"><span>Deck</span></div>
-        ${Array.from({ length: n }, (_, k) => `<div class="sf-card">${face(k)}<div class="card back"></div></div>`).join('')}
-      </div>`;
+    box.style.left = cx - W / 2 + 'px';
+    box.style.top = cy - H / 2 + 'px';
+    box.style.width = W + 'px';
+    box.innerHTML = `<div class="sf-label">Shuffling the discards…</div>`
+      + Array.from({ length: n }, (_, k) => `<div class="sf-card">${face(k)}<div class="card back"></div></div>`).join('');
     document.body.appendChild(box);
-    const dur = 2700;
-    box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, fill: 'both' });
-    box.querySelectorAll('.sf-card').forEach((c, k) => {
+    const label = box.querySelector('.sf-label');
+    label.animate([{ opacity: 0, transform: 'translate(-50%, 6px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 250, fill: 'both' });
+
+    // 1) discards fan in face up, 2) turn face down, 3) riffle twice.
+    const cards = [...box.querySelectorAll('.sf-card')];
+    cards.forEach((c, k) => {
       const side = k % 2 ? 1 : -1;
-      const y = -k * 1.6;
-      const sy = (k % 3) * 5 - 5, sr = ((k * 37) % 21) - 10;
+      const y = -k * 1.5;
+      const fan = (k - (n - 1) / 2) * 13;
       c.animate([
-        { transform: `translate(-112px, ${sy}px) rotate(${sr}deg)`, offset: 0 },
-        { transform: `translate(-112px, ${sy}px) rotate(${sr}deg)`, offset: 0.12 },
-        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.28 },
-        { transform: `translate(${side * 46}px, ${y}px) rotate(${side * 9}deg)`, offset: 0.38 },
-        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.5 },
-        { transform: `translate(${side * 46}px, ${y}px) rotate(${side * 9}deg)`, offset: 0.6 },
-        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.72 },
-        { transform: `translate(112px, ${y}px) rotate(0deg)`, offset: 0.88 },
-        { transform: `translate(112px, ${y}px) rotate(0deg)`, offset: 1 },
-      ], { duration: dur, delay: k * 25, easing: 'ease-in-out', fill: 'both' });
-      // Face up while it's the discard pile, face down from the moment it's picked up.
-      c.lastElementChild.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.16 }, { opacity: 1, offset: 0.24 }, { opacity: 1 }], { duration: dur, delay: k * 25, fill: 'both' });
+        { transform: `translate(${fan}px, 30px) rotate(${fan / 2}deg)`, opacity: 0, offset: 0 },
+        { transform: `translate(${fan}px, 0) rotate(${fan / 2}deg)`, opacity: 1, offset: 0.16 },
+        { transform: `translate(${fan}px, 0) rotate(${fan / 2}deg)`, offset: 0.3 },
+        { transform: `translate(0, ${y}px)`, offset: 0.42 },
+        { transform: `translate(${side * W * 0.62}px, ${y}px) rotate(${side * 8}deg)`, offset: 0.56 },
+        { transform: `translate(0, ${y}px)`, offset: 0.7 },
+        { transform: `translate(${side * W * 0.62}px, ${y}px) rotate(${side * 8}deg)`, offset: 0.84 },
+        { transform: `translate(0, ${y}px)`, offset: 1 },
+      ], { duration: dur, delay: k * 20, easing: 'ease-in-out', fill: 'both' });
+      c.lastElementChild.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1, offset: 0.4 }, { opacity: 1 }], { duration: dur, delay: k * 20, fill: 'both' });
     });
-    await sleep(dur * 0.9);
-    box.querySelector('.sf-title').innerHTML = 'Cards shuffled!';
-    box.querySelector('.sf-slot.right').classList.add('full');
-    await sleep(700);
-    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, fill: 'forwards' });
-    await sleep(290);
+    await sleep(dur + 160);
+
+    // 4) the new deck drops into the Flip button, which refills with a sweep and a counting number.
+    label.textContent = 'Cards shuffled!';
+    const dx = fb.left + fb.width / 2 - cx, dy = fb.top + fb.height / 2 - cy;
+    cards.forEach((c, k) => {
+      c.animate([
+        { transform: `translate(0, ${-k * 1.5}px)`, opacity: 1 },
+        { transform: `translate(${dx}px, ${dy}px) scale(.35)`, opacity: 0.2 },
+      ], { duration: 520, delay: k * 45, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'both' });
+    });
+    await sleep(380);
+    flip.classList.add('refilling');
+    const fill = document.createElement('i');
+    fill.className = 'refill';
+    flip.prepend(fill);
+    const fillDur = 800;
+    fill.animate([{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], { duration: fillDur, easing: 'cubic-bezier(.3, .7, .3, 1)', fill: 'forwards' });
+    const count = $('#deckCount');
+    const t0 = performance.now();
+    await new Promise((resolve) => {
+      const tick = (now) => {
+        const k = Math.min(1, (now - t0) / fillDur);
+        const v = Math.round(total * (1 - Math.pow(1 - k, 2)));
+        count.textContent = `${v} card${v === 1 ? '' : 's'} left`;
+        if (k < 1) requestAnimationFrame(tick); else resolve();
+      };
+      requestAnimationFrame(tick);
+      setTimeout(resolve, fillDur + 400); // never hang if frames are paused (backgrounded tab)
+    });
+    flip.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
+    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' });
+    fill.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
+    await sleep(420);
     box.remove();
+    fill.remove();
+    flip.classList.remove('refilling');
   }
 
   // Bust: split the (already swollen, glowing) revealed card along a jagged crack. The halves ease
