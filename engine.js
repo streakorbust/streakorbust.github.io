@@ -49,7 +49,7 @@
       this.rng = opts.rng || Math.random;
       this.events = [];
       this.s = {
-        players: names.map((name) => ({ name, total: 0, cards: [], shield: null, bust: null, status: 'active', sweep: false })),
+        players: names.map((name) => ({ name, total: 0, cards: [], shields: [], bust: null, status: 'active', sweep: false })),
         deck: opts.deck ? opts.deck.slice() : shuffle(buildDeck(), this.rng),
         discard: [],
         dealer: opts.dealer != null ? opts.dealer : 0,
@@ -67,6 +67,11 @@
     }
 
     static load(state) {
+      // Older saves held at most one Lifeline in p.shield; now it's a list.
+      for (const p of state.players || []) {
+        if (!Array.isArray(p.shields)) p.shields = p.shield ? [p.shield] : [];
+        delete p.shield;
+      }
       const g = Object.create(Game.prototype);
       g.rng = Math.random;
       g.events = [];
@@ -101,9 +106,9 @@
       if (s.phase !== 'summary') return;
       for (const p of s.players) {
         s.discard.push(...p.cards);
-        if (p.shield) s.discard.push(p.shield);
+        s.discard.push(...p.shields);
         if (p.bust) s.discard.push(p.bust);
-        p.cards = []; p.shield = null; p.bust = null;
+        p.cards = []; p.shields = []; p.bust = null;
       }
       s.awaiting = null;
       s.dealer = (s.dealer + 1) % s.players.length;
@@ -170,9 +175,9 @@
       if (card.kind === 'num') {
         const dup = pl.cards.some((c) => c.kind === 'num' && c.value === card.value);
         if (dup) {
-          if (pl.shield) {
-            s.discard.push(card, pl.shield);
-            pl.shield = null;
+          if (pl.shields.length) {
+            // A Lifeline saves you: the repeat number and one Lifeline go to the discard pile.
+            s.discard.push(card, pl.shields.pop());
             this.emit('saved', { p, card });
           } else {
             pl.status = 'busted';
@@ -194,8 +199,9 @@
         pl.cards.push(card);
         this.emit('place', { p, card });
       } else if (card.kind === 'shield') {
-        if (!pl.shield) { pl.shield = card; this.emit('place', { p, card }); }
-        else s.tasks.unshift({ t: 'target', action: 'shield', from: p, card });
+        // Keep every Lifeline you draw. Each one saves you from one bust.
+        pl.shields.push(card);
+        this.emit('place', { p, card });
       } else if (rid) {
         s.setAside[rid].push(card);
         this.emit('setAside', { p, card });
@@ -209,7 +215,7 @@
       const out = [];
       ps.forEach((p, i) => {
         if (p.status !== 'active') return;
-        if (action === 'shield' && (i === from || p.shield)) return;
+        if (action === 'shield') return; // Lifelines are never handed to anyone
         out.push(i);
       });
       return out;
@@ -251,7 +257,7 @@
         s.tasks.unshift({ t: 'rush', p: t, left: 3, id });
         this.emit('rush', { p: task.from, t, card: task.card, auto });
       } else if (task.action === 'shield') {
-        target.shield = task.card;
+        target.shields.push(task.card);
         this.emit('giveShield', { p: task.from, t, card: task.card, auto });
       }
     }

@@ -693,3 +693,26 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .step .n { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--brand); color: #fff; font-weight: 800; font-size: 14px; }
 .step-note { margin: 0; font-size: 14px; color: var(--ink2); }
 .ios-share { width: 18px; height: 18px; vertical-align: -3px; color: var(--brand); }
+
+.tag-s.bot { background: #6a5cf0; }
+.tag-s.rejoin { background: var(--gold); color: #3a2a00; }
+
+/* ---------- target picker ---------- */
+.seg button.custom { min-width: 76px; }
+.target-in { display: block; width: 100%; margin: 14px 0 18px; padding: 14px; font: inherit; font-size: 32px; font-weight: 800; text-align: center; color: var(--ink);
+  background: var(--soft); border: 1px solid transparent; border-radius: 14px; outline: none; -webkit-user-select: text; user-select: text; }
+.target-in:focus { border-color: var(--brand); background: #fff; }
+
+/* ---------- reshuffle ---------- */
+.shufflefx { position: fixed; inset: 0; z-index: 45; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
+  background: rgba(226, 243, 251, .95); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.sf-title { text-align: center; font-size: 22px; font-weight: 800; line-height: 1.25; color: var(--ink); }
+.sf-stage { position: relative; width: 300px; height: 150px; }
+.sf-slot { position: absolute; top: 18px; width: 72px; aspect-ratio: 5 / 7; border-radius: 10px; border: 2px dashed var(--line2); }
+.sf-slot.left { left: 4px; }
+.sf-slot.right { right: 4px; transition: border-color .3s, background .3s; }
+.sf-slot.right.full { border-color: var(--good); background: rgba(26, 168, 99, .08); }
+.sf-slot span { position: absolute; top: calc(100% + 10px); left: 50%; transform: translateX(-50%); white-space: nowrap; font-size: 13px; font-weight: 700; color: var(--ink2); }
+.sf-card { position: absolute; left: calc(50% - 32px); top: 22px; width: 64px; aspect-ratio: 5 / 7; }
+.sf-card > .card { position: absolute; inset: 0; width: 100%; box-shadow: 0 2px 8px rgba(15, 42, 68, .18); }
+.seg.modes button.on { background: var(--brand); color: #fff; box-shadow: 0 2px 8px rgba(22, 119, 201, .3); }

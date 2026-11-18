@@ -78,11 +78,11 @@ test('turns alternate and closed players are skipped', () => {
 test('shield cancels a bust', () => {
   const g = game(['A', 'B'], [N(5), N(3), A('shield'), N(5), N(6)]);
   g.hit(); // A gets shield
-  eq(!!g.s.players[0].shield, true);
+  eq(g.s.players[0].shields.length, 1);
   g.stay(); // B
   g.hit(); // A draws 5 -> saved
   eq(st(g, 0), 'active');
-  eq(g.s.players[0].shield, null);
+  eq(g.s.players[0].shields.length, 0);
   eq(g.s.players[0].cards.map(c => c.value), [5]);
 });
 
@@ -153,19 +153,31 @@ test('shield can save mid rush', () => {
   eq(g.s.players[1].cards.map(c => c.value), [3, 4]);
 });
 
-test('extra shield goes to another player, or is discarded', () => {
-  const g = game(['A', 'B', 'C'], [N(5), N(3), N(2), A('shield'), N(1), N(4), A('shield')]);
-  g.hit(); g.hit(); g.hit(); // A gets SC; B 1; C 4
-  g.hit(); // A draws a 2nd Shield -> choose B or C
-  eq(g.s.awaiting.type, 'target');
-  eq(g.s.awaiting.options, [1, 2]);
-  g.chooseTarget(2);
-  eq(!!g.s.players[2].shield, true);
+test('players keep every Lifeline they draw, and each saves one bust', () => {
+  const g = game(['A', 'B'], [N(5), N(3), A('shield'), N(1), A('shield'), N(2), N(5), N(9), N(1), N(7)]);
+  g.hit(); // A: Lifeline
+  g.hit(); // B: 1
+  g.hit(); // A: 2nd Lifeline, kept
+  eq(g.s.players[0].shields.length, 2);
+  eq(g.s.players[1].shields.length, 0, 'never given away');
+  g.hit(); // B: 2
+  g.hit(); // A: 5 again -> saved, 1 Lifeline left
+  eq(st(g, 0), 'active');
+  eq(g.s.players[0].shields.length, 1);
+  g.hit(); // B: 9
+  g.hit(); // A: 1, fine
+  g.hit(); // B: 7
+  eq(g.s.players[0].shields.length, 1);
+});
 
-  const h = game(['A', 'B'], [N(5), N(3), A('shield'), A('shield')]);
-  h.hit(); h.stay(); h.hit(); // B closed, A's extra SC has no taker
-  eq(h.s.discard.some(c => c.kind === 'shield'), true);
-  eq(h.s.awaiting, { type: 'decide', p: 0 });
+test('old saves with a single Lifeline still load', () => {
+  const g = game(['A', 'B'], [N(5), N(3), A('shield')]);
+  g.hit();
+  const old = JSON.parse(JSON.stringify(g.s));
+  old.players.forEach((p) => { p.shield = p.shields[0] || null; delete p.shields; });
+  const h = Game.load(old);
+  eq(h.s.players[0].shields.length, 1);
+  eq(h.s.players[1].shields.length, 0);
 });
 
 test('action dealt during the opening deal resolves immediately', () => {
@@ -274,7 +286,7 @@ test('random full games never crash', () => {
       if (a.type === 'decide') { const r = Math.random(); if (r < 0.1 && g.canSkip(a.p)) g.skip(); else if (r < 0.75) g.hit(); else g.stay(); }
       else if (a.type === 'target') g.chooseTarget(a.options[Math.floor(Math.random() * a.options.length)]);
       else if (a.type === 'summary') g.nextRound();
-      const total = g.s.deck.length + g.s.discard.length + g.s.players.reduce((t, p) => t + p.cards.length + (p.shield ? 1 : 0) + (p.bust ? 1 : 0), 0) +
+      const total = g.s.deck.length + g.s.discard.length + g.s.players.reduce((t, p) => t + p.cards.length + p.shields.length + (p.bust ? 1 : 0), 0) +
         Object.values(g.s.setAside).reduce((t, a) => t + a.length, 0) + (g.s.awaiting && g.s.awaiting.card ? 1 : 0) + g.s.tasks.filter(t => t.t === 'target').length;
       if (total !== 94) throw new Error('card count ' + total + ' in game ' + n);
     }

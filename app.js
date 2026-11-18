@@ -299,6 +299,52 @@
     setTimeout(() => { if (tok === revealToken) { el.innerHTML = ''; el.className = ''; } }, 300);
   }
 
+  // Reshuffle, step by step so it's obvious what's happening: the face-up discard pile sits next
+  // to the empty deck, the cards turn face down, get riffled twice, and slide over as the new deck.
+  async function shuffleAnim(snap) {
+    const total = snap && snap.deck ? snap.deck.length : 0;
+    const pool = snap && snap.deck ? snap.deck.filter((c) => c && c.kind) : [];
+    const face = (k) => cardHTML(pool.length ? pool[(k * 7) % pool.length] : { kind: 'num', value: 1 + ((k * 5) % 12) });
+    const n = 8;
+    const box = document.createElement('div');
+    box.className = 'shufflefx';
+    box.innerHTML = `<div class="sf-title">The deck is empty.<br>Shuffling the discards…</div>
+      <div class="sf-stage">
+        <div class="sf-slot left"><span>Discards</span></div>
+        <div class="sf-slot right"><span class="sf-count">Deck: 0 cards</span></div>
+        ${Array.from({ length: n }, (_, k) => `<div class="sf-card">${face(k)}<div class="card back"></div></div>`).join('')}
+      </div>`;
+    document.body.appendChild(box);
+    const dur = 2700;
+    box.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 250, fill: 'both' });
+    box.querySelectorAll('.sf-card').forEach((c, k) => {
+      const side = k % 2 ? 1 : -1;
+      const y = -k * 1.6;
+      const sy = (k % 3) * 5 - 5, sr = ((k * 37) % 21) - 10;
+      c.animate([
+        { transform: `translate(-112px, ${sy}px) rotate(${sr}deg)`, offset: 0 },
+        { transform: `translate(-112px, ${sy}px) rotate(${sr}deg)`, offset: 0.12 },
+        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.28 },
+        { transform: `translate(${side * 46}px, ${y}px) rotate(${side * 9}deg)`, offset: 0.38 },
+        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.5 },
+        { transform: `translate(${side * 46}px, ${y}px) rotate(${side * 9}deg)`, offset: 0.6 },
+        { transform: `translate(0, ${y}px) rotate(0deg)`, offset: 0.72 },
+        { transform: `translate(112px, ${y}px) rotate(0deg)`, offset: 0.88 },
+        { transform: `translate(112px, ${y}px) rotate(0deg)`, offset: 1 },
+      ], { duration: dur, delay: k * 25, easing: 'ease-in-out', fill: 'both' });
+      // Face up while it's the discard pile, face down from the moment it's picked up.
+      c.lastElementChild.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.16 }, { opacity: 1, offset: 0.24 }, { opacity: 1 }], { duration: dur, delay: k * 25, fill: 'both' });
+    });
+    await sleep(dur * 0.9);
+    box.querySelector('.sf-count').textContent = `Deck: ${total} cards`;
+    box.querySelector('.sf-title').innerHTML = 'New deck ready!';
+    box.querySelector('.sf-slot.right').classList.add('full');
+    await sleep(700);
+    box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 280, fill: 'forwards' });
+    await sleep(290);
+    box.remove();
+  }
+
   // Bust: split the (already swollen, glowing) revealed card along a jagged crack. The halves ease
   // apart, tilt and sink while fading — one smooth motion, no snap.
   function shatterReveal() {
@@ -358,7 +404,7 @@
       const live = s.phase === 'play' && (p.status !== 'busted' || b.score > 0) && (p.cards.length || p.status !== 'active') ? `<span class="plus">+${b.score}</span>` : '';
       return `<button class="chip ${cls.join(' ')}" data-i="${i}" style="--pc:${pc(i)}">${i === s.dealer ? '<span class="dealer">Dealer</span>' : ''}
         <div class="nm">${esc(p.name)}</div><div class="tot">${p.total}</div>
-        <div class="rd">${live}${statusTag(p)}${p.shield && p.status === 'active' ? '<span class="tag-s sc">♥</span>' : ''}</div>
+        <div class="rd">${live}${statusTag(p)}${p.shields.length && p.status === 'active' ? `<span class="tag-s sc">♥${p.shields.length > 1 ? p.shields.length : ''}</span>` : ''}</div>
         <div class="bar"><i style="width:${Math.min(100, (p.total / s.target) * 100)}%"></i></div></button>`;
     }).join('');
 
@@ -372,7 +418,7 @@
 
     // controls
     const ctr = $('#controls');
-    const canAct = !busy && turnP != null && isMine(turnP) && !pendingAct;
+    const canAct = !busy && turnP != null && isMine(turnP) && !pendingAct && !(mode !== 'local' && rejoining[turnP]) && (mode !== 'guest' || Net.connected);
     ctr.classList.toggle('locked', !canAct);
     ctr.classList.toggle('watching', mode !== 'local' && !(turnP != null && isMine(turnP)));
     $('#btnFlip').classList.toggle('nudge', canAct);
@@ -430,11 +476,12 @@
       if (p.bust) { row += bustCardHTML(p, newId); used++; }
       for (let k = used; k < 7; k++) row += '<div class="slot"></div>';
       const extras = p.cards.filter((c) => c.kind !== 'num');
-      if (p.shield) extras.push(p.shield);
+      extras.push(...p.shields);
       const extrasHTML = extras.map((c) => cardHTML(c, c.id === newId ? 'new' : '')).join('');
       const tag = (i === turnP ? `<span class="tag-s turn">${isMine(i) ? 'YOUR TURN' : 'TURN'}</span>` : statusTag(p))
         + (online && i === mySeat ? '<span class="tag-s you">You</span>' : '')
-        + (online && presence[i] === false ? '<span class="tag-s away">Away</span>' : '');
+        + (online && presence[i] === false && p.status !== 'sitout' ? '<span class="tag-s bot">BOT</span>' : '')
+        + (online && rejoining[i] ? '<span class="tag-s rejoin">Rejoining</span>' : '');
       return `<div class="${cls.join(' ')}" data-i="${i}" style="--pc:${pc(i)}">
         <div class="seat-head">
           <div class="seat-name"><span class="nm">${esc(p.name)}</span>${tag}${i === s.dealer ? '<span class="tag-s dealer">Dealer</span>' : ''}</div>
@@ -481,8 +528,7 @@
         break;
       }
       case 'reshuffle':
-        toast('The deck ran out, so the discard pile was shuffled in');
-        await sleep(800);
+        await shuffleAnim(s);
         break;
       case 'turn':
         render(s, ev.p);
@@ -539,7 +585,7 @@
         await sleep(2100);
         break;
       case 'setAside':
-        toast(`${ACTION_NAME[ev.card.kind]} waits until the Hat Trick is over`);
+        toast(`${ACTION_NAME[ev.card.kind]} waits until these 3 cards are done`);
         await sleep(800);
         hideReveal(true);
         await sleep(250);
@@ -584,7 +630,7 @@
         break;
       case 'discardAction':
         hideReveal(true);
-        toast(`Nobody can take the ${ACTION_NAME[ev.card.kind]}, so it's discarded`);
+        toast(ev.extra ? `${nm(ev.p)} already has a Lifeline, so the extra one is discarded` : `Nobody can take the ${ACTION_NAME[ev.card.kind]}, so it's discarded`);
         await sleep(1000);
         break;
       case 'stay':
@@ -640,7 +686,7 @@
     } else heart.stop();
     waitNote('');
     if (a.type === 'target') {
-      if (isMine(a.p)) showTarget(a);
+      if (isMine(a.p) && !rejoining[a.p]) showTarget(a);
       else waitNote(`<b style="color:${pc(a.p)}">${esc(s.players[a.p].name)}</b> is choosing who gets the ${ACTION_NAME[a.action]}…`);
     }
     else if (a.type === 'summary' || a.type === 'over') showSummary();
@@ -701,7 +747,7 @@
       const n = p.cards.filter((c) => c.kind === 'num').length;
       return `<button data-i="${i}" style="--pc:${pc(i)}; animation-delay:${0.12 + k * 0.06}s">
         <div class="pk-who"><div class="pn"><span class="pn-t">${esc(p.name)}</span>${i === a.p ? '<span class="you">YOU</span>' : ''}</div>
-        <div class="pm">${n}/7 numbers${p.shield ? ' · has a Lifeline' : ''}</div></div>
+        <div class="pm">${n}/7 numbers${p.shields.length ? ` · ${p.shields.length} Lifeline${p.shields.length > 1 ? 's' : ''}` : ''}</div></div>
         <div class="pk-stat rd">+${b.score}</div><div class="pk-stat tot">${p.total}</div></button>`;
     }).join('');
     openModal(`<div class="pk-hero">
@@ -816,14 +862,15 @@
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
     <ul><li><b>Chill</b>: pick anyone who's still in, including yourself. They keep their points but they're done for the round.</li>
       <li><b>Hat Trick</b>: pick anyone who's still in. They have to flip 3 cards in a row. If they flip an action card along the way, it waits until all 3 are done.</li>
-      <li><b>Lifeline</b>: hang on to it. The next time you'd bust, it saves you, and both cards go to the discard pile. You can only hold one, so if you draw a second, give it to someone else.</li>
+      <li><b>Lifeline</b>: keep it. The next time you'd bust, it saves you, and that Lifeline and the repeat number go to the discard pile. Keep every Lifeline you draw. Each one saves you once.</li>
       <li>If you're the only one left in the round, you have to use Chill or Hat Trick on yourself.</li></ul>
     <h3>How a round works</h3><ul>
       <li>Everyone gets one card to start, then you take turns around the table. The round is over once everyone has closed, busted or been chilled, or as soon as someone gets a Clean Sweep.</li>
       <li>When someone hits the target score at the end of a round, the game is over and the highest score wins. If it's a tie, keep playing.</li></ul>
     <h3>Playing online</h3><ul>
       <li>If your phone drops out, open the app again and tap <b>Rejoin</b>. Your seat will be waiting.</li>
-      <li>If it's your turn while you're gone, everyone waits 20 seconds, then the game closes for you. You still keep your points for that round.</li>
+      <li>While you're gone, a bot plays your turns so nobody has to wait. You'll see a <b>BOT</b> tag on your seat.</li>
+      <li>When you come back you're marked <b>Rejoining</b>, and you take over again on your next turn.</li>
       <li>If you're gone for more than 3 minutes, you sit out until you're back. Your score stays where it was, and you're dealt back in the next round.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them to come back.</li></ul>
     <h3>The deck</h3><ul>
@@ -897,11 +944,6 @@
     });
   }
 
-  const ago = (t) => {
-    const days = Math.floor((Date.now() - t) / 864e5);
-    return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
-  };
-
   // Trophy, winner line, and a score bar per player; Play again starts a rematch (only when no game is saved).
   function renderRecap(hasSave) {
     const box = $('#recap');
@@ -912,8 +954,7 @@
     const top = Math.max(1, ranked[0].total);
     const winner = last.players[last.winner] || ranked[0];
     box.innerHTML = `<div class="rc-head"><span class="rc-trophy" aria-hidden="true">🏆</span>
-        <div class="rc-txt"><div class="rc-title"><b style="color:${pc(winner.i)}">${esc(winner.name)}</b> won last game!</div>
-        <div class="rc-sub">${last.rounds} round${last.rounds === 1 ? '' : 's'} · to ${last.target} · ${ago(last.when)}</div></div>
+        <div class="rc-txt"><div class="rc-title"><b style="color:${pc(winner.i)}">${esc(winner.name)}</b> won last game!</div></div>
         ${hasSave ? '' : '<button class="rc-again" id="btnPlayAgain">Play again</button>'}</div>
       <div class="rc-rows">${ranked.map((p) => `<div class="rc-row" style="--pc:${pc(p.i)}"><span class="rc-name">${esc(p.name)}</span>
         <span class="rc-bar"><i data-w="${Math.round((p.total / top) * 100)}"></i></span><span class="rc-pts">${p.total}</span></div>`).join('')}</div>`;
@@ -931,7 +972,7 @@
     wrap.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', () => {
       prefs.names[+inp.dataset.i] = inp.value; store.set(PREFS, prefs);
     }));
-    document.querySelectorAll('#targetSeg button').forEach((b) => b.classList.toggle('on', +b.dataset.v === prefs.target));
+    paintTarget('#targetSeg', prefs.target);
   }
 
   function startGame(names, target, deck) {
@@ -1058,54 +1099,80 @@
     pump();
   }
 
-  // The player whose turn it is has dropped out: the host can move for them so the game goes on.
-  function hostCover() {
-    const a = game && game.s.awaiting;
-    if (!a || a.p == null || presence[a.p] !== false) return;
-    if (a.type === 'decide') hostApply(a.p, 'stay');
-    else if (a.type === 'target') hostApply(a.p, 'target', a.options[Math.floor(Math.random() * a.options.length)]);
-    hostUndo = null;
+  // ---------- away players: a bot plays for them ----------
+  // While someone's phone is disconnected, the host's phone plays their turns right away with a
+  // simple bot (they're tagged BOT). When they reconnect they're tagged REJOINING, and they take
+  // over again at the start of their next turn. Gone 3+ minutes: they sit out from the next round.
+  const BOT_DELAY_MS = 1300;
+  const SIT_OUT_MS = 3 * 60000;
+  let botTimer = null;
+  let botKey = null;
+  let rejoining = []; // guests: seats whose player is back but waiting for their next turn
+
+  // Is the bot in charge of this seat for the current decision?
+  let botHoldUntil = 0;
+  function botRuns(seat, a) {
+    const m = members[seat];
+    if (!m || m.cid === myCid || Date.now() < botHoldUntil) return false;
+    if (!m.on) return true;
+    return !!m.rejoin && a.type !== 'decide';
   }
 
-  // ---------- away players ----------
-  // Their turn: everyone sees a 20s countdown, then the host's phone closes (or picks) for them.
-  // Gone 3+ minutes: they sit out from the next round until they're back.
-  const AWAY_TURN_MS = 20000;
-  const SIT_OUT_MS = 3 * 60000;
-  let countdown = null; // host: { key, timer }
-  let awayTick = null;
-  function awayKey() {
-    const a = game && game.s.awaiting;
-    if (!a || a.p == null || presence[a.p] !== false || (a.type !== 'decide' && a.type !== 'target')) return null;
-    return `${game.s.round}:${a.type}:${a.p}:${game.s.deck.length}:${game.s.discard.length}`;
+  // The bot plays like a casual player, not a perfect one: each round it picks a points number
+  // to stop at (somewhere from 15 to 30), stops a bit sooner once its hand gets crowded, and
+  // gets a little braver while it holds a Lifeline.
+  const botStops = {};
+  function botChoose(a) {
+    const s = game.s;
+    const me = s.players[a.p];
+    if (a.type === 'decide') {
+      const plan = botStops[a.p];
+      if (!plan || plan.round !== s.round) botStops[a.p] = { round: s.round, stop: 15 + Math.floor(Math.random() * 16) };
+      let stop = botStops[a.p].stop;
+      if (numsOf(me) >= 5) stop -= 8;
+      if (me.shields.length) stop += 8;
+      return breakdown(me).score >= stop ? ['stay'] : ['hit'];
+    }
+    const others = a.options.filter((i) => i !== a.p);
+    if (!others.length) return ['target', a.options[0]];
+    const any = others[Math.floor(Math.random() * others.length)];
+    if (a.action === 'lock') {
+      // Chill whoever's winning the game, like most people would.
+      return ['target', others.slice().sort((x, y) => s.players[y].total - s.players[x].total)[0]];
+    }
+    return ['target', any];
   }
+
+  // Host: after every settle, see whether it's a bot's move (or a returning player's turn).
   function hostWatch() {
     if (mode !== 'host' || !game) return;
-    const key = awayKey();
-    if (countdown && countdown.key === key) return;
-    if (countdown) { clearTimeout(countdown.timer); countdown = null; Net.broadcast({ t: 'countdown', p: null }); showCountdown(null); }
-    if (!key) return;
     const a = game.s.awaiting;
-    countdown = { key, timer: setTimeout(() => { countdown = null; showCountdown(null); Net.broadcast({ t: 'countdown', p: null }); hostCover(); }, AWAY_TURN_MS) };
-    Net.broadcast({ t: 'countdown', p: a.p, ms: AWAY_TURN_MS, what: a.type });
-    showCountdown(a.p, AWAY_TURN_MS, a.type);
+    if (a && a.type === 'decide' && a.p != null) {
+      const m = members[a.p];
+      if (m && m.on && m.rejoin) { m.rejoin = false; presenceChanged(); toast(`<b>${esc(m.name)}</b> is back in control`); }
+    }
+    const key = a && a.p != null && (a.type === 'decide' || a.type === 'target') && botRuns(a.p, a)
+      ? `${game.s.round}:${a.type}:${a.p}:${game.s.deck.length}:${game.s.discard.length}` : null;
+    if (key === botKey) return;
+    clearTimeout(botTimer);
+    botKey = key;
+    if (!key) return;
+    botTimer = setTimeout(() => {
+      botKey = null;
+      const now = game && game.s.awaiting;
+      if (!now || now.p !== a.p || now.type !== a.type || !botRuns(now.p, now)) return;
+      const [act2, i] = botChoose(now);
+      hostApply(now.p, act2, i);
+      hostUndo = null;
+    }, BOT_DELAY_MS);
   }
-  // p: away player, or null to hide. Also used for "waiting for the host" (p = -1).
-  function showCountdown(p, ms, what) {
-    clearInterval(awayTick);
+
+  // Shown on guests while the host's phone is unreachable.
+  function showCountdown(p) {
     const el = $('#awayNote');
     if (p == null || !game) { el.classList.remove('show'); return; }
-    if (p === -1) { el.innerHTML = 'Waiting for the host to come back…'; el.classList.add('show'); return; }
-    const end = Date.now() + ms;
-    const name = esc(game.s.players[p].name);
-    const tick = () => {
-      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-      el.innerHTML = `${name} is away · ${what === 'target' ? 'auto-pick' : 'auto-close'} in <b>${left}s</b>`;
-      if (!left) clearInterval(awayTick);
-    };
-    tick();
+    el.innerHTML = 'Waiting for the host to come back…';
     el.classList.add('show');
-    awayTick = setInterval(tick, 250);
   }
   // Host: every few seconds, sit out anyone who's been gone too long.
   setInterval(() => {
@@ -1129,7 +1196,8 @@
 
   function presenceChanged() {
     presence = members.map((m) => m.cid === myCid || m.on);
-    Net.broadcast({ t: 'presence', on: presence });
+    rejoining = members.map((m) => !!(m.on && m.rejoin));
+    Net.broadcast({ t: 'presence', on: presence, rejoin: rejoining });
     if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
   }
 
@@ -1149,12 +1217,15 @@
         if (!m) { Net.sendTo(peerId, { t: 'refuse', why: 'started' }); Net.kick(peerId); return; }
         const wasOff = !m.on;
         m.peer = peerId; m.on = true; m.awaySince = null;
+        if (wasOff && !m.fresh) m.rejoin = true; // takes over again at the start of their next turn
+        const fresh = m.fresh;
+        m.fresh = false;
         const seatP = game.s.players[members.indexOf(m)];
         const wasOut = seatP && seatP.out;
         if (seatP) seatP.out = false;
-        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on) });
+        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)) });
         presenceChanged();
-        if (wasOff) toast(wasOut && seatP.status === 'sitout' ? `<b>${esc(m.name)}</b> is back and gets dealt in next round` : `<b>${esc(m.name)}</b> is back`);
+        if (wasOff && !fresh) toast(wasOut && seatP.status === 'sitout' ? `<b>${esc(m.name)}</b> is back and gets dealt in next round` : `<b>${esc(m.name)}</b> is back and takes over on their next turn`);
         hostWatch();
         return;
       }
@@ -1180,7 +1251,7 @@
     m.awaySince = Date.now();
     presenceChanged();
     hostWatch();
-    toast(`<b>${esc(m.name)}</b> dropped out. They have 3 minutes to rejoin before sitting out.`, 3200);
+    toast(`<b>${esc(m.name)}</b> dropped out. A bot is playing for them until they're back.`, 3200);
   }
 
   function hostStart() {
@@ -1234,6 +1305,8 @@
         lastTurnP = a && a.p != null ? a.p : null;
         closeModal();
         if (!$('#table').classList.contains('active')) { showScreen('table'); keepAwake(); }
+        if (d.rejoin) rejoining = d.rejoin;
+        if (rejoining[mySeat]) toast("You're back! You'll take over on your next turn", 3000);
         if (d.undoBy != null) toast(`<b>${esc(game.s.players[d.undoBy].name)}</b> took back their close`);
         if (!busy) settle();
         break;
@@ -1247,14 +1320,12 @@
         game.s = d.state;
         pump();
         break;
-      case 'countdown':
-        showCountdown(d.p, d.ms, d.what);
-        break;
       case 'sitout':
         if (game) (d.out || []).forEach((o, i) => { if (game.s.players[i]) game.s.players[i].out = o; });
         break;
       case 'presence':
         presence = d.on || [];
+        rejoining = d.rejoin || [];
         if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
         break;
       case 'refuse':
@@ -1283,7 +1354,7 @@
     $('#lbPlayers').innerHTML = list.map((m, i) => `<div class="lb-p" style="--pc:${pc(i)}"><span class="sw"></span><span class="lb-n">${esc(m.name)}</span>`
       + `${i === 0 ? '<span class="tag-s dealer">Host</span>' : ''}${m.cid === myCid ? '<span class="tag-s you">You</span>' : ''}</div>`).join('')
       + (list.length < MAX_PLAYERS ? `<div class="lb-p empty"><span class="sw"></span><span class="lb-n">${list.length ? 'Waiting for friends…' : 'Connecting…'}</span></div>` : '');
-    document.querySelectorAll('#lbTarget button').forEach((b) => b.classList.toggle('on', +b.dataset.v === target));
+    paintTarget('#lbTarget', target);
     $('#lbNote').textContent = isHost
       ? (list.length < 2 ? 'Send friends the code or invite link. You need at least 2 players.' : `Ready when you are. First to ${target} wins.`)
       : `Waiting for ${list[0] ? list[0].name : 'the host'} to start. First to ${target} wins.`;
@@ -1335,7 +1406,9 @@
     if (epoch !== netEpoch) return;
     setNetBusy(false);
     if (reopen) {
-      members = reopen.members.map((m) => ({ cid: m.cid, name: m.name, peer: null, on: m.cid === myCid }));
+      members = reopen.members.map((m) => ({ cid: m.cid, name: m.name, peer: null, on: m.cid === myCid, fresh: true }));
+      botHoldUntil = Date.now() + 15000; // friends' phones reconnect on their own; don't play for them yet
+      setTimeout(hostWatch, 15100);
       mySeat = members.findIndex((m) => m.cid === myCid);
       lobbyTarget = reopen.target;
       presence = members.map((m) => m.cid === myCid);
@@ -1395,7 +1468,7 @@
     clearPending();
     clearUndo();
     waitNote('');
-    if (countdown) { clearTimeout(countdown.timer); countdown = null; }
+    clearTimeout(botTimer); botKey = null; rejoining = [];
     showCountdown(null);
     closeModal();
     showSetup();
@@ -1469,7 +1542,7 @@
     Net.on('lost', () => {
       if (mode !== 'guest') return;
       $('#lbConn').textContent = 'Reconnecting…';
-      if (game) showCountdown(-1); else toast('Lost the connection. Reconnecting…', 3000);
+      if (game) { showCountdown(-1); if (!busy) render(game.s, focusP); } else toast('Lost the connection. Reconnecting…', 3000);
     });
     Net.on('error', () => { if (mode === 'host') toast('Room connection hiccup. Reconnecting…', 2500); });
 
@@ -1482,13 +1555,13 @@
     $('#lbShare').onclick = invite;
     $('#lbStart').onclick = () => { if (mode === 'host') hostStart(); };
     $('#lbLeave').onclick = () => leaveRoom();
-    document.querySelectorAll('#lbTarget button').forEach((b) => b.addEventListener('click', () => {
+    bindTarget('#lbTarget', () => lobbyTarget, (v) => {
       if (mode !== 'host') return;
-      lobbyTarget = +b.dataset.v;
-      prefs.target = lobbyTarget;
+      lobbyTarget = v;
+      prefs.target = v;
       store.set(PREFS, prefs);
       lobbyChanged();
-    }));
+    });
     // Opened from an invite link: fill in the code and point at the Join button.
     const m = /[?&]room=([A-Za-z]{4})\b/.exec(location.search);
     if (m) {
@@ -1502,7 +1575,38 @@
   // ---------------- wiring ----------------
   $('#pMinus').onclick = () => { if (prefs.count > 2) { prefs.count--; store.set(PREFS, prefs); renderNames(); } };
   $('#pPlus').onclick = () => { if (prefs.count < MAX_PLAYERS) { prefs.count++; store.set(PREFS, prefs); renderNames(); } };
-  document.querySelectorAll('#targetSeg button').forEach((b) => b.addEventListener('click', () => { prefs.target = +b.dataset.v; store.set(PREFS, prefs); renderNames(); }));
+  // Target score: 100, 200 or any custom number.
+  function paintTarget(sel, v) {
+    document.querySelectorAll(`${sel} button`).forEach((b) => {
+      const custom = b.dataset.v === 'custom';
+      const on = custom ? v !== 100 && v !== 200 : +b.dataset.v === v;
+      b.classList.toggle('on', on);
+      if (custom) b.textContent = on ? `${v} ✎` : 'Custom';
+    });
+  }
+  function askTarget(current, done) {
+    openModal(`<h2>Play to how many points?</h2><p>Pick any number from 25 to 1000.</p>
+      <input id="mTarget" class="target-in" type="number" inputmode="numeric" min="25" max="1000" step="5" value="${current !== 100 && current !== 200 ? current : 150}">
+      <div class="mbtns"><button class="btn primary" id="mSet">Set target</button><button class="btn ghost" id="mCancel">Cancel</button></div>`, (m) => {
+      const inp = m.querySelector('#mTarget');
+      setTimeout(() => { inp.focus(); inp.select(); }, 50);
+      const set = () => {
+        const v = Math.round(+inp.value);
+        if (!(v >= 25 && v <= 1000)) { toast('Pick a number from 25 to 1000'); return; }
+        closeModal();
+        done(v);
+      };
+      m.querySelector('#mSet').onclick = set;
+      inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') set(); });
+      m.querySelector('#mCancel').onclick = closeModal;
+    });
+  }
+  function bindTarget(sel, get, set) {
+    document.querySelectorAll(`${sel} button`).forEach((b) => b.addEventListener('click', () => {
+      if (b.dataset.v === 'custom') askTarget(get(), set); else set(+b.dataset.v);
+    }));
+  }
+  bindTarget('#targetSeg', () => prefs.target, (v) => { prefs.target = v; store.set(PREFS, prefs); renderNames(); });
   $('#btnStart').onclick = () => {
     const names = Array.from({ length: prefs.count }, (_, i) => (prefs.names[i] || '').trim() || `Player ${i + 1}`);
     startGame(names, prefs.target);
@@ -1528,7 +1632,7 @@
   };
   $('#btnMenu').onclick = () => { showMenu(); };
 
-  const canAct = () => !busy && !pendingAct && game && game.s.awaiting && game.s.awaiting.type === 'decide' && isMine(game.s.awaiting.p);
+  const canAct = () => !busy && !pendingAct && game && game.s.awaiting && game.s.awaiting.type === 'decide' && isMine(game.s.awaiting.p) && (mode !== 'guest' || Net.connected);
   function doFlip() {
     if (!canAct()) return;
     clearUndo();
@@ -1595,6 +1699,7 @@
 
   // Testing hook: open with ?debug to get window.__deal(names, cardsInDrawOrder).
   if (debug) {
+    window.__shuffle = () => shuffleAnim({ deck: StreakOrBust.buildDeck().slice(0, 61) });
     window.__deal = (names, cards, target = 200) => {
       const filler = StreakOrBust.buildDeck().filter((c) => c.kind === 'num');
       startGame(names, target, filler.concat(cards.slice().reverse()));
