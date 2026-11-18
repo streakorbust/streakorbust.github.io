@@ -889,7 +889,7 @@
       <li>Get 7 different numbers and the round ends right away. You get an extra <b>15 points</b>.</li></ul>
     <h3>Scoring</h3>
     <div class="minis">${cardHTML({ kind: 'num', value: 3 })}${cardHTML({ kind: 'num', value: 9 })}${cardHTML({ kind: 'x2' })}${cardHTML({ kind: 'mod', value: 4 })}</div>
-    <ul><li>Add up your numbers, double them if you have a ×2, then add your + cards.</li>
+    <ul><li>Add up your numbers, double them if you have a ×2, then add your + cards. The ×2 only doubles number cards, never your + cards.</li>
       <li>So the hand above is worth (3 + 9) × 2 + 4 = <b>28</b>.</li></ul>
     <h3>Action cards</h3>
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
