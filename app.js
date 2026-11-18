@@ -63,7 +63,7 @@
   function cardHTML(c, cls = '') {
     switch (c.kind) {
       case 'num':
-        return `<div class="card num ${c.value === 6 || c.value === 9 ? 'u69 ' : ''}${cls}" style="--c:${NUM_COLORS[c.value]}"><span class="big">${c.value}</span></div>`;
+        return `<div class="card num ${c.value === 6 || c.value === 9 ? 'u69 ' : ''}${c.value >= 10 ? 'two ' : ''}${cls}" style="--c:${NUM_COLORS[c.value]}"><span class="big">${c.value}</span></div>`;
       case 'mod':
         return `<div class="card mod ${cls}"><span class="big">+${c.value}</span></div>`;
       case 'x2':
