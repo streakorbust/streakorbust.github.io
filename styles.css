@@ -719,6 +719,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .lbl-hint { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 4px; }
 
 /* Number cards: one big number, no corner numbers. */
-.card.num .big { font-size: 72cqw; letter-spacing: 0; }
-/* Two digits (10-12): smaller and slightly tighter, and nudged so the pair sits dead center. */
-.card.num.two .big { font-size: 58cqw; letter-spacing: -.04em; text-indent: -.04em; }
+/* Every number is the same size: one size that a 12 fits comfortably. */
+.card.num .big { font-size: 60cqw; letter-spacing: 0; }
+/* Two digits: digits sit a touch closer, nudged so the pair stays dead center. */
+.card.num.two .big { letter-spacing: -.05em; text-indent: -.05em; }
