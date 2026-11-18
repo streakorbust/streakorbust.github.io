@@ -246,6 +246,23 @@ test('save/load round trip mid rush', () => {
   eq(h.s.awaiting, g.s.awaiting);
 });
 
+test('sitting-out players get no cards and no turns', () => {
+  const g = new Game(['A', 'B', 'C'], { deck: Array.from({ length: 30 }, () => N(12)).concat([N(5), N(3)].reverse()), dealer: 2 });
+  g.s.players[1].out = true;
+  g.startRound();
+  eq(st(g, 1), 'sitout');
+  eq(g.s.players[1].cards.length, 0);
+  eq(g.s.awaiting.p, 0);
+  g.stay();
+  eq(g.s.awaiting.p, 2, 'B is skipped');
+  g.stay();
+  eq(g.s.phase, 'summary');
+  eq(g.s.summary.rows[1].score, 0);
+  g.s.players[1].out = false;
+  g.nextRound();
+  eq(st(g, 1), 'active', 'back in next round');
+});
+
 test('random full games never crash', () => {
   for (let n = 0; n < 2000; n++) {
     const names = Array.from({ length: 2 + (n % 7) }, (_, i) => 'P' + i);

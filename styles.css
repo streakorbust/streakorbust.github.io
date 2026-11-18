@@ -192,8 +192,6 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #controls.locked button { opacity: .4; pointer-events: none; box-shadow: none; }
 
 /* Hold to flip: the button fills from left to right while held. */
-.deckbtn .charge { position: absolute; inset: 0; background: rgba(255, 255, 255, .22); transform: scaleX(0); transform-origin: left; pointer-events: none; }
-.deckbtn.charging .charge { transform: scaleX(1); transition: transform .7s linear; }
 .deckbtn.charging { background: var(--hot-d); }
 .deckbtn.charged { box-shadow: 0 0 0 3px rgba(245, 179, 1, .55), 0 6px 16px rgba(242, 98, 46, .3); }
 .deckbtn > span { position: relative; }
@@ -675,3 +673,11 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .pk-stat.tot { color: var(--ink); }
 @media (max-height: 740px) { #modal.picker h2 { font-size: 25px; } .pk-stat { font-size: 22px; } }
 @media (max-width: 360px) { .pk-cols, #modal.picker .pick button { grid-template-columns: 1fr 64px 52px; } }
+
+/* ---------- away players: countdown / waiting-for-host note ---------- */
+#awayNote { position: fixed; left: 50%; top: calc(var(--safe-t) + 54px); transform: translate(-50%, -8px); z-index: 31; max-width: 92vw; padding: 9px 16px;
+  border-radius: 999px; background: var(--ink); color: #fff; box-shadow: var(--shadow-lg); font-size: 14px; font-weight: 600; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#awayNote.show { opacity: 1; transform: translate(-50%, 0); }
+#awayNote b { font-variant-numeric: tabular-nums; }
+.tag-s.sitout { background: #9fb3c4; }

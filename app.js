@@ -23,7 +23,7 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } },
   };
-  const prefs = Object.assign({ names: [], count: 2, target: 200, myName: '', mode: 'online', cid: '' }, store.get(PREFS) || {});
+  const prefs = Object.assign({ names: [], count: 2, target: 200, myName: '', mode: 'local', cid: '' }, store.get(PREFS) || {});
   prefs.count = Math.min(prefs.count, MAX_PLAYERS);
   const debug = /[?&]debug\b/.test(location.search);
   // This phone's id in online rooms, so a dropped player gets their seat back when they reconnect.
@@ -327,6 +327,7 @@
 
   // ---------------- rendering ----------------
   function statusTag(p) {
+    if (p.status === 'sitout') return '<span class="tag-s sitout">SITTING OUT</span>';
     if (p.status === 'busted') return '<span class="tag-s bust">BUST</span>';
     if (p.sweep) return '<span class="tag-s closed">SWEEP</span>';
     if (p.status === 'locked') return '<span class="tag-s locked">CHILLED</span>';
@@ -480,7 +481,7 @@
         break;
       }
       case 'reshuffle':
-        toast('Deck ran out, so the discards were shuffled in');
+        toast('The deck ran out, so the discard pile was shuffled in');
         await sleep(800);
         break;
       case 'turn':
@@ -628,7 +629,7 @@
     if (a && a.p != null) focusP = a.p;
     render(s, focusP);
     if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); }
-    if (mode === 'local') store.set(SAVE, s); else if (mode === 'host') saveHosted();
+    if (mode === 'local') store.set(SAVE, s); else if (mode === 'host') { saveHosted(); hostWatch(); }
     // Left for the home screen while animations were finishing: keep the save, but don't pop
     // in-game sheets over the menu. Continue picks up from here.
     if (!$('#table').classList.contains('active')) { heart.stop(); return; }
@@ -798,31 +799,37 @@
   }
 
   const RULES_HTML = `<h2>How to play</h2><div class="rules">
-    <p class="lead">Flip cards to build a hand of different numbers. Stop before you flip one you already have. First to the target score wins.</p>
-    <h3>On your turn</h3><ul>
-      <li><b>Flip</b>: take the top card. Press and hold the deck, then let go. Slide off before letting go to back out.</li>
-      <li><b>Close</b>: keep your points and sit out the rest of the round. Action cards can't touch you after that. Undo is there for 5 seconds.</li>
-      <li><b>Skip</b>: pass once per round without flipping. You stay in. Not allowed when you're the last player in.</li></ul>
-    <h3>Bust</h3><ul>
-      <li>Flip a number you already have and you bust. You lose your numbers and ×2 for the round, but you keep your + cards.</li></ul>
+    <p class="lead">Flip cards and try to collect as many different numbers as you can. Flip a number you already have and you bust. First to the target score wins.</p>
+    <h3>Your turn</h3><ul>
+      <li><b>Flip</b> to take the next card.</li>
+      <li><b>Close</b> to lock in your points and sit out the rest of the round. Nobody can hit you with action cards after that. Tapped it by accident? You have 5 seconds to undo.</li>
+      <li><b>Skip</b> to pass without flipping. You can do this once a round, and you stay in. You can't skip if you're the last one left.</li></ul>
+    <h3>Busting</h3><ul>
+      <li>If you flip a number you already have, you bust. You lose your numbers and your ×2 for the round, but you still keep your + cards.</li></ul>
     <h3>Clean Sweep</h3><ul>
-      <li>Hold <b>7 different numbers</b> and the round ends right away. You get <b>+15</b>.</li></ul>
+      <li>Get 7 different numbers and the round ends right away. You get an extra <b>15 points</b>.</li></ul>
     <h3>Scoring</h3>
     <div class="minis">${cardHTML({ kind: 'num', value: 3 })}${cardHTML({ kind: 'num', value: 9 })}${cardHTML({ kind: 'x2' })}${cardHTML({ kind: 'mod', value: 4 })}</div>
-    <ul><li>Add up your numbers. <b>×2</b> doubles them. Then add your <b>+</b> cards and any Sweep bonus.</li>
-      <li>Example above: (3 + 9) × 2 + 4 = <b>28</b>.</li></ul>
+    <ul><li>Add up your numbers, double them if you have a ×2, then add your + cards.</li>
+      <li>So the hand above is worth (3 + 9) × 2 + 4 = <b>28</b>.</li></ul>
     <h3>Action cards</h3>
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
-    <ul><li><b>Chill</b>: choose a player still in (you can pick yourself). They keep their points and are out for the round.</li>
-      <li><b>Hat Trick</b>: choose a player still in. They take 3 cards in a row. Action cards they get during it wait until all 3 are done.</li>
-      <li><b>Lifeline</b>: hold it. It cancels one bust: the repeat number and the Lifeline are both thrown away. You can hold one Lifeline, so a second one goes to another player.</li>
-      <li>If you're the only player left in the round, you have to use Chill or Hat Trick on yourself.</li></ul>
-    <h3>Rounds</h3><ul>
-      <li>Everyone gets one card, then turns go around the table. The round ends when nobody is left in, or someone makes a Clean Sweep.</li>
-      <li>The game ends after a round where someone reaches the target score. Most points wins. A tie keeps playing.</li></ul>
+    <ul><li><b>Chill</b>: pick anyone who's still in, including yourself. They keep their points but they're done for the round.</li>
+      <li><b>Hat Trick</b>: pick anyone who's still in. They have to flip 3 cards in a row. If they flip an action card along the way, it waits until all 3 are done.</li>
+      <li><b>Lifeline</b>: hang on to it. The next time you'd bust, it saves you, and both cards go to the discard pile. You can only hold one, so if you draw a second, give it to someone else.</li>
+      <li>If you're the only one left in the round, you have to use Chill or Hat Trick on yourself.</li></ul>
+    <h3>How a round works</h3><ul>
+      <li>Everyone gets one card to start, then you take turns around the table. The round is over once everyone has closed, busted or been chilled, or as soon as someone gets a Clean Sweep.</li>
+      <li>When someone hits the target score at the end of a round, the game is over and the highest score wins. If it's a tie, keep playing.</li></ul>
+    <h3>Playing online</h3><ul>
+      <li>If your phone drops out, open the app again and tap <b>Rejoin</b>. Your seat will be waiting.</li>
+      <li>If it's your turn while you're gone, everyone waits 20 seconds, then the game closes for you. You still keep your points for that round.</li>
+      <li>If you're gone for more than 3 minutes, you sit out until you're back. Your score stays where it was, and you're dealt back in the next round.</li>
+      <li>The host's phone runs the game, so if the host leaves, everyone waits for them to come back.</li></ul>
     <h3>The deck</h3><ul>
-      <li>94 cards: one 0, then as many copies of each number as its value (one 1, two 2s … twelve 12s). One each of +2, +4, +6, +8, +10 and ×2. Three each of Chill, Hat Trick and Lifeline.</li>
-      <li>When the deck runs out, the thrown-away cards are shuffled into a new deck.</li></ul>
+      <li>There are 94 cards. Number cards go from 0 to 12, and each number has as many copies as its value: one 1, two 2s, all the way up to twelve 12s, plus a single 0.</li>
+      <li>There's one each of +2, +4, +6, +8, +10 and ×2, and three each of Chill, Hat Trick and Lifeline.</li>
+      <li>When the deck runs out, the discard pile gets shuffled to make a new one.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
@@ -1056,8 +1063,64 @@
     const a = game && game.s.awaiting;
     if (!a || a.p == null || presence[a.p] !== false) return;
     if (a.type === 'decide') hostApply(a.p, 'stay');
-    else if (a.type === 'target') hostApply(a.p, 'target', a.options.includes(a.p) ? a.p : a.options[0]);
+    else if (a.type === 'target') hostApply(a.p, 'target', a.options[Math.floor(Math.random() * a.options.length)]);
+    hostUndo = null;
   }
+
+  // ---------- away players ----------
+  // Their turn: everyone sees a 20s countdown, then the host's phone closes (or picks) for them.
+  // Gone 3+ minutes: they sit out from the next round until they're back.
+  const AWAY_TURN_MS = 20000;
+  const SIT_OUT_MS = 3 * 60000;
+  let countdown = null; // host: { key, timer }
+  let awayTick = null;
+  function awayKey() {
+    const a = game && game.s.awaiting;
+    if (!a || a.p == null || presence[a.p] !== false || (a.type !== 'decide' && a.type !== 'target')) return null;
+    return `${game.s.round}:${a.type}:${a.p}:${game.s.deck.length}:${game.s.discard.length}`;
+  }
+  function hostWatch() {
+    if (mode !== 'host' || !game) return;
+    const key = awayKey();
+    if (countdown && countdown.key === key) return;
+    if (countdown) { clearTimeout(countdown.timer); countdown = null; Net.broadcast({ t: 'countdown', p: null }); showCountdown(null); }
+    if (!key) return;
+    const a = game.s.awaiting;
+    countdown = { key, timer: setTimeout(() => { countdown = null; showCountdown(null); Net.broadcast({ t: 'countdown', p: null }); hostCover(); }, AWAY_TURN_MS) };
+    Net.broadcast({ t: 'countdown', p: a.p, ms: AWAY_TURN_MS, what: a.type });
+    showCountdown(a.p, AWAY_TURN_MS, a.type);
+  }
+  // p: away player, or null to hide. Also used for "waiting for the host" (p = -1).
+  function showCountdown(p, ms, what) {
+    clearInterval(awayTick);
+    const el = $('#awayNote');
+    if (p == null || !game) { el.classList.remove('show'); return; }
+    if (p === -1) { el.innerHTML = 'Waiting for the host to come back…'; el.classList.add('show'); return; }
+    const end = Date.now() + ms;
+    const name = esc(game.s.players[p].name);
+    const tick = () => {
+      const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+      el.innerHTML = `${name} is away · ${what === 'target' ? 'auto-pick' : 'auto-close'} in <b>${left}s</b>`;
+      if (!left) clearInterval(awayTick);
+    };
+    tick();
+    el.classList.add('show');
+    awayTick = setInterval(tick, 250);
+  }
+  // Host: every few seconds, sit out anyone who's been gone too long.
+  setInterval(() => {
+    if (mode !== 'host' || !game) return;
+    let changed = false;
+    members.forEach((m, i) => {
+      const p = game.s.players[i];
+      if (!m.on && m.awaySince && Date.now() - m.awaySince >= SIT_OUT_MS && p && !p.out) {
+        p.out = true;
+        changed = true;
+        toast(`<b>${esc(m.name)}</b> has been gone 3 minutes and sits out until they're back`, 3200);
+      }
+    });
+    if (changed) { saveHosted(); Net.broadcast({ t: 'sitout', out: game.s.players.map((p) => !!p.out) }); }
+  }, 5000);
 
   function saveHosted() {
     if (mode !== 'host' || !game) return;
@@ -1085,10 +1148,14 @@
       if (game) {
         if (!m) { Net.sendTo(peerId, { t: 'refuse', why: 'started' }); Net.kick(peerId); return; }
         const wasOff = !m.on;
-        m.peer = peerId; m.on = true;
+        m.peer = peerId; m.on = true; m.awaySince = null;
+        const seatP = game.s.players[members.indexOf(m)];
+        const wasOut = seatP && seatP.out;
+        if (seatP) seatP.out = false;
         Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on) });
         presenceChanged();
-        if (wasOff) toast(`<b>${esc(m.name)}</b> is back`);
+        if (wasOff) toast(wasOut && seatP.status === 'sitout' ? `<b>${esc(m.name)}</b> is back and gets dealt in next round` : `<b>${esc(m.name)}</b> is back`);
+        hostWatch();
         return;
       }
       if (!m) {
@@ -1110,8 +1177,10 @@
     m.peer = null;
     if (!game) { members = members.filter((x) => x !== m); lobbyChanged(); return; }
     m.on = false;
+    m.awaySince = Date.now();
     presenceChanged();
-    toast(`<b>${esc(m.name)}</b> dropped out. They can rejoin with the code.`, 3000);
+    hostWatch();
+    toast(`<b>${esc(m.name)}</b> dropped out. They have 3 minutes to rejoin before sitting out.`, 3200);
   }
 
   function hostStart() {
@@ -1177,6 +1246,12 @@
         game.events.push(...d.evs);
         game.s = d.state;
         pump();
+        break;
+      case 'countdown':
+        showCountdown(d.p, d.ms, d.what);
+        break;
+      case 'sitout':
+        if (game) (d.out || []).forEach((o, i) => { if (game.s.players[i]) game.s.players[i].out = o; });
         break;
       case 'presence':
         presence = d.on || [];
@@ -1320,6 +1395,8 @@
     clearPending();
     clearUndo();
     waitNote('');
+    if (countdown) { clearTimeout(countdown.timer); countdown = null; }
+    showCountdown(null);
     closeModal();
     showSetup();
   }
@@ -1359,7 +1436,7 @@
     $('#localPane').classList.toggle('hidden', m !== 'local');
   }
   function renderOnlineHome() {
-    setHomeMode(prefs.mode === 'local' ? 'local' : 'online');
+    setHomeMode(prefs.mode === 'online' ? 'online' : 'local');
     if (!$('#myName').value) $('#myName').value = prefs.myName || '';
     setNetBusy(false);
     const btn = $('#btnRejoin');
@@ -1387,11 +1464,12 @@
       if (mode !== 'guest') return;
       Net.send({ t: 'hello', cid: myCid, name: prefs.myName });
       $('#lbConn').textContent = '';
+      showCountdown(null);
     });
     Net.on('lost', () => {
       if (mode !== 'guest') return;
-      toast('Lost the connection. Reconnecting…', 3000);
       $('#lbConn').textContent = 'Reconnecting…';
+      if (game) showCountdown(-1); else toast('Lost the connection. Reconnecting…', 3000);
     });
     Net.on('error', () => { if (mode === 'host') toast('Room connection hiccup. Reconnecting…', 2500); });
 
@@ -1457,33 +1535,8 @@
     act('hit');
   }
 
-  // Hold to flip: press the deck (card lifts and wobbles), let go to reveal. Slide off to back out.
-  const flipBtn = $('#btnFlip');
-  let hold = null;
-  flipBtn.addEventListener('pointerdown', (e) => {
-    if (!canAct() || hold) return;
-    e.preventDefault();
-    try { flipBtn.setPointerCapture(e.pointerId); } catch (_) { /* older browsers */ }
-    flipBtn.classList.add('charging');
-    hold = { t: setTimeout(() => flipBtn.classList.add('charged'), 700) };
-  });
-  function endHold(fire, e) {
-    if (!hold) return;
-    clearTimeout(hold.t);
-    hold = null;
-    flipBtn.classList.remove('charging', 'charged');
-    if (!fire) return;
-    const r = flipBtn.getBoundingClientRect();
-    if (e && (e.clientX < r.left - 24 || e.clientX > r.right + 24 || e.clientY < r.top - 60 || e.clientY > r.bottom + 30)) {
-      toast('Chickened out 🐔', 1200);
-      return;
-    }
-    doFlip();
-  }
-  flipBtn.addEventListener('pointerup', (e) => endHold(true, e));
-  flipBtn.addEventListener('pointercancel', () => endHold(false));
-  flipBtn.addEventListener('contextmenu', (e) => e.preventDefault());
-  flipBtn.addEventListener('click', (e) => { if (e.detail === 0) doFlip(); }); // keyboard / scripted clicks
+  // One tap flips.
+  $('#btnFlip').addEventListener('click', doFlip);
 
   $('#btnClose').onclick = () => {
     if (!canAct()) return;

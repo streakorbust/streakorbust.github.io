@@ -43,19 +43,9 @@
 
     <div id="recap" class="recap hidden"></div>
 
-    <div class="seg modes" id="modeSeg"><button data-m="online" class="on">Play online</button><button data-m="local">One phone</button></div>
+    <div class="seg modes" id="modeSeg"><button data-m="local" class="on">One phone</button><button data-m="online">Play online</button></div>
 
-    <div id="onlinePane">
-      <button id="btnRejoin" class="resume hidden"></button>
-      <div class="panel">
-        <div class="nameIn me"><span class="sw"></span><input id="myName" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name"></div>
-        <button id="btnCreate" class="btn primary big">Create a room</button>
-        <div class="or"><span>or join friends</span></div>
-        <div class="joinrow"><input id="joinCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code"><button id="btnJoin" class="btn primary">Join</button></div>
-      </div>
-    </div>
-
-    <div id="localPane" class="hidden">
+    <div id="localPane">
     <button id="btnResume" class="resume hidden" aria-label="Continue saved game">Continue saved game</button>
       <button id="btnEndSaved" class="btn ghost end-saved hidden">End this game</button>
     <div class="panel">
@@ -78,6 +68,16 @@
 
     <button id="btnStart" class="btn primary big">Deal the cards</button>
     </div>
+    <div id="onlinePane" class="hidden">
+      <button id="btnRejoin" class="resume hidden"></button>
+      <div class="panel">
+        <div class="nameIn me"><span class="sw"></span><input id="myName" maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Your name"></div>
+        <button id="btnCreate" class="btn primary big">Create a room</button>
+        <div class="or"><span>or join friends</span></div>
+        <div class="joinrow"><input id="joinCode" maxlength="4" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="CODE" aria-label="Room code"><button id="btnJoin" class="btn primary">Join</button></div>
+      </div>
+    </div>
+
     <button id="btnRules" class="btn link">How to play</button>
   </section>
 
@@ -113,7 +113,7 @@
       </main>
     </div>
     <footer id="controls">
-      <button id="btnFlip" class="deckbtn" aria-label="Flip a card"><i class="charge"></i><span>Flip<small id="deckCount"></small></span></button>
+      <button id="btnFlip" class="deckbtn" aria-label="Flip a card"><span>Flip<small id="deckCount"></small></span></button>
       <button id="btnSkip" class="skipbtn"><b>Skip</b><small id="skipSub">1 per round</small></button>
       <button id="btnClose" class="closebtn"><b>Close</b></button>
     </footer>
@@ -124,6 +124,7 @@
   <button id="undo" class="hidden"><span>Undo close</span><i></i></button>
   <div id="toast"></div>
   <div id="waitNote"></div>
+  <div id="awayNote"></div>
   <div id="modalWrap" class="hidden"><div id="modal"></div></div>
   <canvas id="fx"></canvas>
 </div>

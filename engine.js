@@ -85,7 +85,8 @@
       s.round++;
       s.phase = 'play';
       s.summary = null;
-      for (const p of s.players) { p.status = 'active'; p.sweep = false; p.skipUsed = false; }
+      // Online: a player who has been gone a while sits out (no cards, no turns) until they're back.
+      for (const p of s.players) { p.status = p.out ? 'sitout' : 'active'; p.sweep = false; p.skipUsed = false; }
       const n = s.players.length;
       s.tasks = [];
       for (let k = 1; k <= n; k++) s.tasks.push({ t: 'deal', p: (s.dealer + k) % n });
