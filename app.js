@@ -762,14 +762,58 @@
 
   // ---------------- modals ----------------
   // cls: extra classes for the sheet (the action picker uses a full-screen style).
-  function openModal(html, onBind, cls = '') {
-    $('#modal').className = cls;
-    $('#modal').innerHTML = html;
+  // onDismiss: for sheets you can close without choosing (rules, menus, confirms). They get a
+  // close button, closing by tapping outside, and swipe-down-to-close.
+  let modalDismiss = null;
+  function openModal(html, onBind, cls = '', onDismiss = null) {
+    const m = $('#modal');
+    modalDismiss = onDismiss;
+    m.className = cls + (onDismiss ? ' dismissable' : '');
+    m.style.transform = '';
+    m.style.transition = '';
+    m.innerHTML = (onDismiss ? '<div class="grab" aria-hidden="true"></div><button class="mclose" aria-label="Close">✕</button>' : '') + html;
     $('#modalWrap').classList.remove('hidden');
-    $('#modal').scrollTop = 0;
-    if (onBind) onBind($('#modal'));
+    m.scrollTop = 0;
+    if (onDismiss) m.querySelector('.mclose').onclick = () => onDismiss();
+    if (onBind) onBind(m);
   }
-  function closeModal() { $('#modalWrap').classList.add('hidden'); $('#modal').innerHTML = ''; $('#modal').className = ''; }
+  function closeModal() { modalDismiss = null; $('#modalWrap').classList.add('hidden'); $('#modal').innerHTML = ''; $('#modal').className = ''; $('#modal').style.transform = ''; }
+  const backToTable = () => { closeModal(); if (game && $('#table').classList.contains('active') && !busy) settle(); };
+
+  // Tap outside a closable sheet, or drag it down from the top, to close it.
+  $('#modalWrap').addEventListener('click', (e) => { if (e.target === $('#modalWrap') && modalDismiss) modalDismiss(); });
+  (() => {
+    const m = $('#modal');
+    let drag = null;
+    m.addEventListener('touchstart', (e) => {
+      if (!modalDismiss || m.scrollTop > 0 || e.touches.length > 1) { drag = null; return; }
+      drag = { y: e.touches[0].clientY, dy: 0 };
+    }, { passive: true });
+    m.addEventListener('touchmove', (e) => {
+      if (!drag) return;
+      drag.dy = e.touches[0].clientY - drag.y;
+      if (drag.dy > 0 && m.scrollTop <= 0) {
+        e.preventDefault();
+        m.style.transition = 'none';
+        m.style.transform = `translateY(${drag.dy}px)`;
+      } else if (drag.dy < 0) { drag = null; m.style.transform = ''; }
+    }, { passive: false });
+    const end = () => {
+      if (!drag) return;
+      const dy = drag.dy;
+      drag = null;
+      m.style.transition = 'transform .22s ease';
+      if (dy > 90 && modalDismiss) {
+        m.style.transform = 'translateY(105%)';
+        const fn = modalDismiss;
+        setTimeout(() => fn(), 200);
+      } else {
+        m.style.transform = '';
+      }
+    };
+    m.addEventListener('touchend', end);
+    m.addEventListener('touchcancel', end);
+  })();
 
   // Full-screen action picker: the card floats at the top, players fill the rest as big buttons.
   // Full-screen action picker. One clear line says who drew the card; each player row shows
@@ -925,7 +969,7 @@
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
-    openModal(RULES_HTML, (m) => m.querySelector('#mOk').addEventListener('click', closeModal));
+    openModal(RULES_HTML, (m) => m.querySelector('#mOk').addEventListener('click', backToTable), '', backToTable);
   }
 
   function showMenu() {
@@ -942,10 +986,10 @@
         openModal(`<h2>End this game?</h2><p>Scores will be lost.</p><div class="mbtns"><button class="btn pink" id="mYes">End game</button><button class="btn ghost" id="mNo">Keep playing</button></div>`, (mm) => {
           mm.querySelector('#mYes').onclick = () => { store.del(SAVE); game = null; closeModal(); showSetup(); };
           mm.querySelector('#mNo').onclick = () => { closeModal(); settle(); };
-        });
+        }, '', backToTable);
       };
       m.querySelector('#mBack').onclick = () => { closeModal(); settle(); };
-    });
+    }, '', backToTable);
   }
 
   // ---------------- screens ----------------
@@ -1542,10 +1586,10 @@
           <div class="mbtns"><button class="btn pink" id="mYes">${host ? 'End game' : 'Leave'}</button><button class="btn ghost" id="mNo">Keep playing</button></div>`, (mm) => {
           mm.querySelector('#mYes').onclick = () => leaveRoom();
           mm.querySelector('#mNo').onclick = () => { closeModal(); settle(); };
-        });
+        }, '', backToTable);
       };
       m.querySelector('#mBack').onclick = () => { closeModal(); settle(); };
-    });
+    }, '', backToTable);
   }
 
   // Home screen: mode tabs, the remembered name, and "rejoin/reopen" for an unfinished online game.
@@ -1647,7 +1691,7 @@
       m.querySelector('#mSet').onclick = set;
       inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') set(); });
       m.querySelector('#mCancel').onclick = closeModal;
-    });
+    }, '', closeModal);
   }
   function bindTarget(sel, get, set) {
     document.querySelectorAll(`${sel} button`).forEach((b) => b.addEventListener('click', () => {
@@ -1676,7 +1720,7 @@
       <div class="mbtns"><button class="btn pink" id="mYes">End it and start new</button><button class="btn ghost" id="mNo">Keep playing this one</button></div>`, (m) => {
       m.querySelector('#mYes').onclick = () => { store.del(SAVE); game = null; closeModal(); showSetup(); };
       m.querySelector('#mNo').onclick = closeModal;
-    });
+    }, '', closeModal);
   };
   $('#btnMenu').onclick = () => { showMenu(); };
 
@@ -1719,7 +1763,8 @@
   const installed = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let installEvt = null;
-  function showInstallBtn() { $('#btnInstall').classList.toggle('hidden', NATIVE || installed() || !(installEvt || isIOS)); }
+  const isPhone = isIOS || matchMedia('(pointer: coarse)').matches;
+  function showInstallBtn() { $('#btnInstall').classList.toggle('hidden', NATIVE || installed() || !(installEvt || isPhone)); }
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; showInstallBtn(); });
   addEventListener('appinstalled', () => { installEvt = null; showInstallBtn(); toast('Installed! Open Streak or Bust from your home screen'); });
   const shareIcon = '<svg class="ios-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M7 11H5v10h14V11h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -1731,13 +1776,11 @@
       showInstallBtn();
       return;
     }
-    const safari = isIOS && !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent);
     openModal(`<h2>Install the app</h2><div class="steps">
-      ${safari ? '' : '<p class="step-note">On iPhone, this works best in <b>Safari</b>. Open this page there first.</p>'}
-      <div class="step"><span class="n">1</span><span>Tap the <b>Share</b> button ${shareIcon} at the bottom of the screen.</span></div>
-      <div class="step"><span class="n">2</span><span>Scroll down and tap <b>Add to Home Screen</b>.</span></div>
+      <div class="step"><span class="n">1</span><span>Tap your browser's <b>Share</b> button ${shareIcon} or its <b>⋮</b> menu.</span></div>
+      <div class="step"><span class="n">2</span><span>Tap <b>Add to Home Screen</b>. You may need to scroll down to find it.</span></div>
       <div class="step"><span class="n">3</span><span>Tap <b>Add</b>. The game shows up on your home screen like any other app.</span></div>
-      </div><div class="mbtns"><button class="btn primary" id="mOk">Got it</button></div>`, (m) => { m.querySelector('#mOk').onclick = closeModal; });
+      </div><div class="mbtns"><button class="btn primary" id="mOk">Got it</button></div>`, (m) => { m.querySelector('#mOk').onclick = closeModal; }, '', closeModal);
   };
   showInstallBtn();
 

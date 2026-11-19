@@ -737,3 +737,11 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .rules .card.bustcard { box-shadow: 0 0 0 2.5px var(--bad), 0 0 12px rgba(229, 56, 75, .45); }
 .basics .trick { margin: 12px 0 0; font-size: 14px; font-style: italic; }
 .basics .goal small { display: block; font-size: 13px; font-weight: 500; color: var(--muted); margin-top: 2px; }
+
+/* ---------- closable sheets: grab bar, close button ---------- */
+#modal.dismissable { overscroll-behavior: contain; }
+#modal .grab { width: 40px; height: 5px; border-radius: 3px; background: var(--line2); margin: -10px auto 8px; }
+#modal .mclose { position: sticky; top: 0; z-index: 3; display: grid; place-items: center; width: 36px; height: 36px; margin: -6px -4px -30px auto;
+  border-radius: 50%; background: var(--soft); color: var(--ink2); font-size: 16px; font-weight: 700; box-shadow: 0 1px 4px rgba(15, 42, 68, .12); }
+#modal .mclose:active { transform: scale(.92); }
+#modal.dismissable h2 { padding-right: 40px; }
