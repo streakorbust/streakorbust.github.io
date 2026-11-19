@@ -987,8 +987,9 @@
       <li>Out of cards? The discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li><b>Lost your connection?</b> A bot plays your turns so nobody has to wait. Tap <b>Rejoin</b> within 2 minutes and you take over again on your next turn.</li>
-      <li><b>Gone longer than 2 minutes?</b> The bot stops and you sit out, with your score frozen. You're still in the game: tap <b>Rejoin</b> and you're dealt back in at the start of the next round.</li>
+      <li><b>Lost your connection?</b> A bot plays your turns for up to 2 minutes, so nobody has to wait.</li>
+      <li><b>Gone longer than that?</b> The bot stops and you sit out, with your score frozen.</li>
+      <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
@@ -1297,19 +1298,34 @@
     el.innerHTML = 'Waiting for the host to come back…';
     el.classList.add('show');
   }
-  // Host: every few seconds, sit out anyone who's been gone too long.
+  // Host: every few seconds, sit out anyone who's been gone too long. The bot stops right away:
+  // their hand for this round is set aside (so their total stays frozen) and they get no more turns
+  // until they come back. If the bot is in the middle of a move for them, it finishes that first.
   setInterval(() => {
     if (mode !== 'host' || !game) return;
+    const s = game.s;
     let changed = false;
     members.forEach((m, i) => {
-      const p = game.s.players[i];
-      if (!m.on && m.awaySince && Date.now() - m.awaySince >= SIT_OUT_MS && p && !p.out) {
-        p.out = true;
-        changed = true;
-        toast(`<b>${esc(m.name)}</b> has been gone 2 minutes and sits out until they're back`, 3200);
+      const p = s.players[i];
+      if (m.on || !m.awaySince || Date.now() - m.awaySince < SIT_OUT_MS || !p || p.out) return;
+      if (s.awaiting && s.awaiting.p === i) return; // let the bot finish this move; check again shortly
+      p.out = true;
+      if (s.phase === 'play' && p.status === 'active') {
+        s.discard.push(...p.cards, ...p.shields);
+        p.cards = [];
+        p.shields = [];
+        p.status = 'sitout';
       }
+      changed = true;
+      const note = `<b>${esc(m.name)}</b> has been gone 2 minutes, so the bot stops and they sit out until they're back`;
+      toast(note, 3200);
+      members.forEach((x) => { if (x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
     });
-    if (changed) { saveHosted(); Net.broadcast({ t: 'sitout', out: game.s.players.map((p) => !!p.out) }); }
+    if (changed) {
+      saveHosted();
+      Net.broadcast({ t: 'sync', state: strip(s), seats: seatCids(), presence, rejoin: members.map((x) => !!(x.on && x.rejoin)) });
+      if (!busy && $('#table').classList.contains('active')) render(s, focusP);
+    }
   }, 5000);
 
   function saveHosted() {
@@ -1344,11 +1360,20 @@
         const fresh = m.fresh;
         m.fresh = false;
         const seatP = game.s.players[members.indexOf(m)];
-        const wasOut = seatP && seatP.out;
-        if (seatP) seatP.out = false;
-        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)) });
+        if (seatP) {
+          seatP.out = false;
+          // Back mid-round after sitting out: they're in again from their next turn (with an empty hand).
+          if (seatP.status === 'sitout' && game.s.phase === 'play') seatP.status = 'active';
+        }
+        // Tell the returning player what happened while they were gone, and let everyone else know.
+        const back = wasOff && !fresh ? { gained: seatP && m.totalAtDrop != null ? seatP.total - m.totalAtDrop : 0 } : null;
+        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)), back });
         presenceChanged();
-        if (wasOff && !fresh) toast(wasOut && seatP.status === 'sitout' ? `<b>${esc(m.name)}</b> is back and gets dealt in next round` : `<b>${esc(m.name)}</b> is back and takes over on their next turn`);
+        if (back) {
+          const note = `<b>${esc(m.name)}</b> is back and plays on their next turn`;
+          toast(note, 3000);
+          members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
+        }
         hostWatch();
         return;
       }
@@ -1372,9 +1397,12 @@
     if (!game) { members = members.filter((x) => x !== m); lobbyChanged(); return; }
     m.on = false;
     m.awaySince = Date.now();
+    m.totalAtDrop = game.s.players[members.indexOf(m)] ? game.s.players[members.indexOf(m)].total : 0;
     presenceChanged();
     hostWatch();
-    toast(`<b>${esc(m.name)}</b> dropped out. A bot is playing for them until they're back.`, 3200);
+    const note = `<b>${esc(m.name)}</b> dropped out. A bot is playing for them until they're back.`;
+    toast(note, 3200);
+    members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
   }
 
   function hostStart() {
@@ -1430,7 +1458,11 @@
         closeModal();
         if (!$('#table').classList.contains('active')) { showScreen('table'); keepAwake(); }
         if (d.rejoin) rejoining = d.rejoin;
-        if (rejoining[mySeat]) toast("You're back! You'll take over on your next turn", 3000);
+        if (d.back) {
+          const g = d.back.gained;
+          const bot = g > 0 ? ` While you were away, the bot added <b>${g}</b> to your score.` : '';
+          toast(`Welcome back! You're in again on your next turn.${bot}`, 5000);
+        }
         if (d.undoBy != null) toast(`<b>${esc(game.s.players[d.undoBy].name)}</b> took back their close`);
         if (!busy) settle();
         break;
@@ -1446,6 +1478,9 @@
         break;
       case 'sitout':
         if (game) (d.out || []).forEach((o, i) => { if (game.s.players[i]) game.s.players[i].out = o; });
+        break;
+      case 'note':
+        toast(d.html, 3000);
         break;
       case 'presence':
         presence = d.on || [];
