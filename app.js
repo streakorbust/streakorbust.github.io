@@ -733,6 +733,7 @@
     render(s, focusP);
     if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); }
     if (mode === 'local') store.set(SAVE, s); else if (mode === 'host') { saveHosted(); hostWatch(); }
+    else if (mode === 'guest' && s.phase === 'over') store.del(ROOM); // finished: nothing left to rejoin
     // Left for the home screen while animations were finishing: keep the save, but don't pop
     // in-game sheets over the menu. Continue picks up from here.
     if (!$('#table').classList.contains('active')) { heart.stop(); return; }
@@ -986,9 +987,8 @@
       <li>Out of cards? The discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li>Lost your connection? A bot plays your turns until you're back, so nobody has to wait.</li>
-      <li>Gone more than 2 minutes? You sit out with your score frozen until you return.</li>
-      <li>Tap <b>Rejoin</b> to jump back in.</li>
+      <li><b>Lost your connection?</b> A bot plays your turns so nobody has to wait. Tap <b>Rejoin</b> within 2 minutes and you take over again on your next turn.</li>
+      <li><b>Gone longer than 2 minutes?</b> The bot stops and you sit out, with your score frozen. You're still in the game: tap <b>Rejoin</b> and you're dealt back in at the start of the next round.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
@@ -1075,7 +1075,7 @@
         <span class="rc-bar"><i data-w="${Math.round((p.total / top) * 100)}"></i></span><span class="rc-pts">${p.total}</span></div>`).join('')}</div>`;
     setTimeout(() => box.querySelectorAll('.rc-bar i').forEach((i) => { i.style.width = i.dataset.w + '%'; }), 60);
     const again = box.querySelector('#btnPlayAgain');
-    if (again) again.onclick = () => startGame(last.players.map((p) => p.name), last.target);
+    if (again) again.onclick = () => needOnlyLocal(() => startGame(last.players.map((p) => p.name), last.target));
   }
 
   function renderNames() {
@@ -1405,6 +1405,7 @@
         if (!game) showLobby();
         break;
       case 'start':
+        if (Net.code) store.set(ROOM, { code: Net.code, when: Date.now() });
         clearPending();
         clearUndo();
         mySeat = d.seats.indexOf(myCid);
@@ -1635,6 +1636,38 @@
     }, '', backToTable);
   }
 
+  // ---------- one game at a time ----------
+  // A phone can have a one-phone game OR an online game going, never both. Starting one while the
+  // other is still saved asks first.
+  function localGameSaved() {
+    const s = store.get(SAVE);
+    return !!(s && s.players && s.phase !== 'over');
+  }
+  function onlineGameSaved() {
+    const hosted = store.get(HOSTED);
+    if (hosted && hosted.state && hosted.state.phase !== 'over' && hosted.members && hosted.members[0] && hosted.members[0].cid === myCid) return hosted.code;
+    const room = store.get(ROOM);
+    if (room && Date.now() - room.when < 12 * 3600e3) return room.code;
+    return null;
+  }
+  function needOnlyLocal(go) {
+    const code = onlineGameSaved();
+    if (!code) { go(); return; }
+    openModal(`<h2>Leave your online game?</h2><p>You're still in online room <b>${esc(code)}</b>. You can play one game at a time, so leave that room to start a game on this phone.</p>
+      <div class="mbtns"><button class="btn pink" id="mYes">Leave room and play here</button><button class="btn ghost" id="mNo">Keep my online game</button></div>`, (m) => {
+      m.querySelector('#mYes').onclick = () => { store.del(HOSTED); store.del(ROOM); closeModal(); go(); };
+      m.querySelector('#mNo').onclick = () => { closeModal(); setHomeMode('online'); };
+    }, '', closeModal);
+  }
+  function needOnlyOnline(go) {
+    if (!localGameSaved()) { go(); return; }
+    openModal(`<h2>End your game on this phone?</h2><p>You have a one-phone game going. You can play one game at a time, so end it to play online.</p>
+      <div class="mbtns"><button class="btn pink" id="mYes">End it and play online</button><button class="btn ghost" id="mNo">Keep my game</button></div>`, (m) => {
+      m.querySelector('#mYes').onclick = () => { store.del(SAVE); closeModal(); go(); };
+      m.querySelector('#mNo').onclick = () => { closeModal(); setHomeMode('local'); };
+    }, '', closeModal);
+  }
+
   // Home screen: mode tabs, the remembered name, and "rejoin/reopen" for an unfinished online game.
   function setHomeMode(m) {
     prefs.mode = m;
@@ -1656,10 +1689,10 @@
     if (hostOk && !(roomOk && room.when > hosted.when)) {
       const who = hosted.members.map((m, i) => `<b style="color:${pc(i)}">${esc(m.name)}</b>`).join(' · ');
       html = `<span class="rs-txt"><span class="rs-title">Reopen room ${esc(hosted.code)}</span><span class="rs-sub">Round ${hosted.state.round} · you're the host</span><span class="rs-who">${who}</span></span>`;
-      btn.onclick = () => createRoom(hosted);
+      btn.onclick = () => needOnlyOnline(() => createRoom(hosted));
     } else if (roomOk) {
       html = `<span class="rs-txt"><span class="rs-title">Rejoin room ${esc(room.code)}</span><span class="rs-sub">Pick up where you left off</span></span>`;
-      btn.onclick = () => joinRoom(room.code);
+      btn.onclick = () => needOnlyOnline(() => joinRoom(room.code));
     }
     if (html) btn.innerHTML = html + '<span class="rs-go" aria-hidden="true">▶</span>';
     btn.classList.toggle('hidden', !html);
@@ -1682,10 +1715,10 @@
     Net.on('error', () => { if (mode === 'host') toast('Room connection hiccup. Reconnecting…', 2500); });
 
     document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', () => setHomeMode(b.dataset.m)));
-    $('#btnCreate').onclick = () => createRoom(null);
-    $('#btnJoin').onclick = () => joinRoom($('#joinCode').value);
+    $('#btnCreate').onclick = () => needOnlyOnline(() => createRoom(null));
+    $('#btnJoin').onclick = () => needOnlyOnline(() => joinRoom($('#joinCode').value));
     $('#joinCode').addEventListener('input', (e) => { e.target.value = Net.cleanCode(e.target.value); });
-    $('#joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinRoom(e.target.value); });
+    $('#joinCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') needOnlyOnline(() => joinRoom(e.target.value)); });
     $('#myName').addEventListener('input', (e) => { prefs.myName = e.target.value; store.set(PREFS, prefs); });
     $('#lbShare').onclick = invite;
     $('#lbStart').onclick = () => { if (mode === 'host') hostStart(); };
@@ -1742,11 +1775,11 @@
     }));
   }
   bindTarget('#targetSeg', () => prefs.target, (v) => { prefs.target = v; store.set(PREFS, prefs); renderNames(); });
-  $('#btnStart').onclick = () => {
+  $('#btnStart').onclick = () => needOnlyLocal(() => {
     const names = Array.from({ length: prefs.count }, (_, i) => (prefs.names[i] || '').trim() || `Player ${i + 1}`);
     startGame(names, prefs.target);
-  };
-  $('#btnResume').onclick = () => {
+  });
+  $('#btnResume').onclick = () => needOnlyLocal(() => {
     const saved = store.get(SAVE);
     if (!saved) return;
     mode = 'local';
@@ -1756,7 +1789,7 @@
     showScreen('table');
     keepAwake();
     settle();
-  };
+  });
   $('#btnRules').onclick = showRules;
   $('#btnShareApp').onclick = shareApp;
   $('#btnEndSaved').onclick = () => {
