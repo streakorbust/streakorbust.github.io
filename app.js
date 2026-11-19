@@ -997,10 +997,12 @@
     if (mode !== 'local') { showRoomMenu(); return; }
     openModal(`<h2>Menu</h2><div class="menu-list">
       <button class="btn ghost" id="mRules">How to play</button>
+      <button class="btn ghost" id="mShare">Share this game</button>
       <button class="btn ghost" id="mHome">Main menu (game is saved)</button>
       <button class="btn ghost" id="mEnd" style="color:var(--bad)">End this game</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
       m.querySelector('#mRules').onclick = showRules;
+      m.querySelector('#mShare').onclick = shareApp;
       m.querySelector('#mHome').onclick = () => { closeModal(); showSetup(); };
       m.querySelector('#mEnd').onclick = () => {
         openModal(`<h2>End this game?</h2><p>Scores will be lost.</p><div class="mbtns"><button class="btn pink" id="mYes">End game</button><button class="btn ghost" id="mNo">Keep playing</button></div>`, (mm) => {
@@ -1474,6 +1476,15 @@
   }
 
   // In the App Store app, links point at the website so friends without the app can join too.
+  // Share the game itself (not a room): native share sheet on phones, else copy the link.
+  async function shareApp() {
+    const url = SITE_URL;
+    try {
+      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text: 'Come play Streak or Bust with me! A fast push-your-luck card game.', url }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it to your friends!'); } catch (e) { toast(`Share this link: <b>${esc(url.replace('https://', ''))}</b>`, 3500); }
+  }
+
   const roomLink = () => `${NATIVE ? SITE_URL : location.origin + location.pathname}?room=${Net.code}`;
   async function invite() {
     const url = roomLink();
@@ -1595,10 +1606,12 @@
       <button class="btn ghost" id="mInvite">Invite friends</button>
       ${coverBtn}
       <button class="btn ghost" id="mRules">How to play</button>
+      <button class="btn ghost" id="mShare">Share this game</button>
       <button class="btn ghost" id="mLeave" style="color:var(--bad)">${mode === 'host' ? 'End the game for everyone' : 'Leave the game'}</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
       m.querySelector('#mInvite').onclick = invite;
       m.querySelector('#mRules').onclick = showRules;
+      m.querySelector('#mShare').onclick = shareApp;
       const cb = m.querySelector('#mCover');
       if (cb) cb.onclick = () => { closeModal(); hostCover(); };
       m.querySelector('#mLeave').onclick = () => {
@@ -1736,6 +1749,7 @@
     settle();
   };
   $('#btnRules').onclick = showRules;
+  $('#btnShareApp').onclick = shareApp;
   $('#btnEndSaved').onclick = () => {
     openModal(`<h2>End this game and start a new one?</h2><p>The current scores will be lost.</p>
       <div class="mbtns"><button class="btn pink" id="mYes">End it and start new</button><button class="btn ghost" id="mNo">Keep playing this one</button></div>`, (m) => {

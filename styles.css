@@ -750,3 +750,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #modal.rules-sheet .mclose { display: none; }
 #modal.rules-sheet h2 { padding-right: 0; }
 
+
+/* Home: How to play · Share with friends */
+.home-links { display: flex; justify-content: center; align-items: center; gap: 2px; flex-wrap: wrap; }
+.home-links .dotsep { color: var(--muted); }
