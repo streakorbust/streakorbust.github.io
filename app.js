@@ -476,10 +476,13 @@
     ctr.classList.toggle('locked', !canAct);
     ctr.classList.toggle('watching', mode !== 'local' && !(turnP != null && isMine(turnP)));
     $('#btnFlip').classList.toggle('nudge', canAct);
-    const used = turnP != null && s.players[turnP].skipUsed;
     const skipOk = canAct && game && game.canSkip(turnP);
     $('#btnSkip').classList.toggle('off', !skipOk);
-    $('#skipSub').textContent = used ? 'used' : turnP != null && !skipOk ? 'last one in' : '1 per round';
+    // The label describes the player whose turn it is, not whether the button is tappable at this
+    // instant (it's briefly locked during every animation), so it doesn't flicker.
+    const sp = cur != null ? s.players[cur] : null;
+    const lastIn = sp && sp.status === 'active' && s.players.filter((p) => p.status === 'active').length <= 1;
+    $('#skipSub').textContent = sp && sp.skipUsed ? 'used' : lastIn ? 'last one in' : '1 per round';
   }
 
   const bustCardHTML = (p, newId) => cardHTML(p.bust, p.bust.id === newId ? 'new' : '').replace(/<\/div>$/, '<div class="xmark">✕</div></div>');
@@ -979,8 +982,9 @@
       <li>The deck has 94 cards. When it runs out, the discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li>If you drop out, a bot plays for you until you're back. Tap <b>Rejoin</b> to take over on your next turn.</li>
-      <li>Gone more than 3 minutes? You sit out until you return. Your score stays put.</li>
+      <li><b>If you drop out</b>, a bot plays your turns so nobody has to wait. Your points can still go up or down.</li>
+      <li><b>After 3 minutes away</b>, the bot stops and you sit out. You get no cards, and your score is frozen. This keeps a bot from playing the whole game for someone who left.</li>
+      <li><b>Coming back?</b> Tap <b>Rejoin</b>. Within 3 minutes, you take over on your next turn. After that, you're dealt back in next round.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
