@@ -754,3 +754,14 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 /* Home: How to play · Share with friends */
 .home-links { display: flex; justify-content: center; align-items: center; gap: 2px; flex-wrap: wrap; }
 .home-links .dotsep { color: var(--muted); }
+
+/* ---------- top actions: Install app + a fun Share button ---------- */
+.top-actions { display: flex; justify-content: center; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.top-actions .install { margin-top: 0; }
+.share-fun { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px 9px 13px; border-radius: 999px; color: #fff; font-weight: 800; font-size: 14px;
+  background: linear-gradient(135deg, #ff8a3d, #f0436a 55%, #b44fe0); box-shadow: 0 2px 4px rgba(240, 67, 106, .25), 0 8px 18px rgba(240, 67, 106, .3);
+  animation: shareBounce 4s ease-in-out 1.5s infinite; transition: transform .1s; }
+.share-fun svg { width: 17px; height: 17px; }
+.share-fun:active { transform: scale(.94); animation: none; }
+@keyframes shareBounce { 0%, 82%, 100% { transform: none; } 86% { transform: translateY(-4px) rotate(-3deg); } 90% { transform: translateY(0) rotate(2deg); } 94% { transform: translateY(-2px); } }
+@media (prefers-reduced-motion: reduce) { .share-fun { animation: none; } }
