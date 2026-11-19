@@ -1078,12 +1078,25 @@
     $('#pCount').textContent = prefs.count;
     $('#pPlus').disabled = prefs.count >= MAX_PLAYERS; // 4 players max
     $('#pMinus').disabled = prefs.count <= 2;
+    // Always a 2x2 grid of slots, so changing the player count never moves anything else on the
+    // screen. Empty slots are "+ Add player" buttons.
     const wrap = $('#names');
-    wrap.classList.toggle('two-col', prefs.count > 2);
-    wrap.innerHTML = Array.from({ length: prefs.count }, (_, i) =>
-      `<div class="nameIn" style="color:${pc(i)}"><span class="sw"></span><input maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Player ${i + 1}" value="${esc(prefs.names[i] || '')}" data-i="${i}"></div>`).join('');
+    wrap.classList.add('two-col');
+    const shown = +(wrap.dataset.count || prefs.count);
+    wrap.dataset.count = prefs.count;
+    wrap.innerHTML = Array.from({ length: MAX_PLAYERS }, (_, i) => (i < prefs.count
+      ? `<div class="nameIn${i >= shown ? ' new' : ''}" style="color:${pc(i)}"><span class="sw"></span><input maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Player ${i + 1}" value="${esc(prefs.names[i] || '')}" data-i="${i}"></div>`
+      : `<button class="nameAdd" type="button" aria-label="Add a player">+ Add player</button>`)).join('');
     wrap.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', () => {
       prefs.names[+inp.dataset.i] = inp.value; store.set(PREFS, prefs);
+    }));
+    wrap.querySelectorAll('.nameAdd').forEach((b) => b.addEventListener('click', () => {
+      if (prefs.count >= MAX_PLAYERS) return;
+      prefs.count++;
+      store.set(PREFS, prefs);
+      renderNames();
+      const inp = wrap.querySelector(`input[data-i="${prefs.count - 1}"]`);
+      if (inp) inp.focus();
     }));
     paintTarget('#targetSeg', prefs.target);
   }

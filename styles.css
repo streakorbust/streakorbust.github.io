@@ -779,3 +779,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 @keyframes installPulse { 0%, 100% { box-shadow: 0 2px 4px rgba(31, 159, 214, .25), 0 6px 14px rgba(31, 159, 214, .3); } 50% { box-shadow: 0 0 0 6px rgba(63, 209, 194, .18), 0 6px 14px rgba(31, 159, 214, .3); } }
 @media (prefers-reduced-motion: reduce) { #setup > .install { animation: none; } }
 @media (max-width: 360px) { #setup > .install { padding: 9px; } #setup > .install span { display: none; } #setup > .install svg { width: 17px; height: 17px; } }
+
+/* Name slots: fixed 2x2 grid; empty slots are dashed "+ Add player" buttons of the same size. */
+#names.two-col .nameIn input, .nameAdd { height: 42px; }
+.nameAdd { min-width: 0; border-radius: 10px; border: 1.5px dashed var(--line2); background: transparent; color: var(--muted); font-size: 14px; font-weight: 700; transition: background .15s, border-color .15s, color .15s; }
+.nameAdd:active { background: var(--soft); border-color: var(--brand); color: var(--brand); }
+#names .nameIn.new { animation: dropin .25s ease-out; }
