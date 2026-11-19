@@ -781,6 +781,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 @media (max-width: 360px) { #setup > .install { padding: 9px; } #setup > .install span { display: none; } #setup > .install svg { width: 17px; height: 17px; } }
 
 /* Name slots: fixed 2x2 grid; empty slots are dashed "+ Add player" buttons of the same size. */
-#names.two-col .nameIn input, .nameEmpty { height: 42px; }
-.nameEmpty { border-radius: 10px; border: 1.5px dashed var(--line); background: rgba(242, 247, 250, .45); }
+/* Every slot is the same height, so the screen never shifts; empty ones are a faded dot + slim dashed bar. */
+#names.two-col .nameIn { height: 42px; }
+#names.two-col .nameIn input { height: 42px; }
+.nameIn.empty .sw { opacity: .3; }
+.nameIn.empty .ph { flex: 1; min-width: 0; height: 30px; border-radius: 9px; border: 1.5px dashed var(--line); }
 #names .nameIn.new { animation: dropin .25s ease-out; }

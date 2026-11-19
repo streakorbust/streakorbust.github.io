@@ -1086,7 +1086,7 @@
     wrap.dataset.count = prefs.count;
     wrap.innerHTML = Array.from({ length: MAX_PLAYERS }, (_, i) => (i < prefs.count
       ? `<div class="nameIn${i >= shown ? ' new' : ''}" style="color:${pc(i)}"><span class="sw"></span><input maxlength="14" autocomplete="off" autocapitalize="words" placeholder="Player ${i + 1}" value="${esc(prefs.names[i] || '')}" data-i="${i}"></div>`
-      : '<div class="nameEmpty" aria-hidden="true"></div>')).join('');
+      : `<div class="nameIn empty" style="color:${pc(i)}" aria-hidden="true"><span class="sw"></span><div class="ph"></div></div>`)).join('');
     wrap.querySelectorAll('input').forEach((inp) => inp.addEventListener('input', () => {
       prefs.names[+inp.dataset.i] = inp.value; store.set(PREFS, prefs);
     }));
@@ -1710,14 +1710,14 @@
   function paintTarget(sel, v) {
     document.querySelectorAll(`${sel} button`).forEach((b) => {
       const custom = b.dataset.v === 'custom';
-      const on = custom ? v !== 100 && v !== 200 : +b.dataset.v === v;
+      const on = custom ? v !== 200 : +b.dataset.v === v;
       b.classList.toggle('on', on);
       if (custom) b.textContent = on ? `${v} ✎` : 'Custom';
     });
   }
   function askTarget(current, done) {
     openModal(`<h2>Play to how many points?</h2><p>Pick any number from 25 to 1000.</p>
-      <input id="mTarget" class="target-in" type="number" inputmode="numeric" min="25" max="1000" step="5" value="${current !== 100 && current !== 200 ? current : 150}">
+      <input id="mTarget" class="target-in" type="number" inputmode="numeric" min="25" max="1000" step="5" value="${current !== 200 ? current : 150}">
       <div class="mbtns"><button class="btn primary" id="mSet">Set target</button><button class="btn ghost" id="mCancel">Cancel</button></div>`, (m) => {
       const inp = m.querySelector('#mTarget');
       setTimeout(() => { inp.focus(); inp.select(); }, 50);
