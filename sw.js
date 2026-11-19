@@ -1,4 +1,4 @@
-// The game moved to https://streakorbust.pages.dev/. Phones that installed the old address still
+// The game moved to https://streakorbust.com/. Phones that installed the old address still
 // have the old offline copy; this replacement clears it and steps aside so they reach the new site.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => {
