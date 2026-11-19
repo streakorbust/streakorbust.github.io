@@ -53,11 +53,33 @@
     });
   }
 
+  // Relay (TURN) servers from our own /turn endpoint, so friends on strict networks can still
+  // connect. If that isn't available, PeerJS's built-in defaults are used, as before.
+  let iceCache = null;
+  async function peerOptions() {
+    if (iceCache && Date.now() - iceCache.t < 6 * 3600e3) return iceCache.opts;
+    try {
+      const local = !location.protocol.startsWith('http') || /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 2500);
+      const r = await fetch(local ? 'https://streakorbust.com/turn' : '/turn', { cache: 'no-store', signal: ctl.signal });
+      clearTimeout(timer);
+      const d = await r.json();
+      if (d.iceServers && d.iceServers.length) {
+        const opts = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }].concat(d.iceServers) } };
+        iceCache = { opts, t: Date.now() };
+        return opts;
+      }
+    } catch (e) { /* no relay: fall back to the defaults */ }
+    return undefined;
+  }
+
   // ---------- host ----------
   // wanted: reopen a specific code (after the host's app restarted). The old id can stay
   // reserved on the server for a little while, so keep trying for ~20s.
   async function host(wanted) {
     await load();
+    const opts = await peerOptions();
     left = false;
     role = 'host';
     let tries = 0;
@@ -65,7 +87,7 @@
       const attempt = (c) => {
         reset();
         code = c;
-        const p = new Peer(PREFIX + c);
+        const p = new Peer(PREFIX + c, opts);
         peer = p;
         let opened = false;
         keepSignal(p);
@@ -98,6 +120,7 @@
   // Resolves once connected to the host; rejects if the room can't be found the first time.
   async function join(wanted) {
     await load();
+    const opts = await peerOptions();
     left = false;
     role = 'guest';
     code = cleanCode(wanted);
@@ -107,7 +130,7 @@
       let settled = false;
       const ok = () => { if (!settled) { settled = true; resolve(code); } };
       const fail = (e) => { if (!settled) { settled = true; left = true; reset(); reject(e); } };
-      const p = new Peer();
+      const p = opts ? new Peer(undefined, opts) : new Peer();
       peer = p;
       keepSignal(p);
       p.on('open', () => connect(ok, fail));

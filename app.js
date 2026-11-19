@@ -17,7 +17,8 @@
   const LAST = 'streakorbust.last.v1'; // summary of the most recent finished game, for the home-screen recap
   const PREFS = 'streakorbust.prefs.v1';
   const HOSTED = 'streakorbust.hosted.v1'; // online game this phone is hosting, so the room can be reopened
-  const ROOM = 'streakorbust.room.v1'; // online room this phone joined as a guest, for one-tap rejoin
+  const ROOM = 'streakorbust.room.v1';
+  const STATS = 'streakorbust.stats.v1'; // friend stats on this phone, by player name // online room this phone joined as a guest, for one-tap rejoin
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
@@ -48,6 +49,20 @@
   let guestX = null; // guests keep their own badges/moments (the host's aren't sent)
   let pendingAct = null; // guest: waiting for the host to apply our move
   const isMine = (i) => mode === 'local' || i === mySeat;
+
+  // Turn nudge: online, if it becomes your turn while you're looking at another app or tab,
+  // the tab title flashes until you come back. No sound, no vibration.
+  const BASE_TITLE = document.title;
+  let nudgeTimer = null;
+  function nudge(on) {
+    clearInterval(nudgeTimer);
+    nudgeTimer = null;
+    document.title = BASE_TITLE;
+    if (!on) return;
+    let k = 0;
+    document.title = '🔔 Your turn!';
+    nudgeTimer = setInterval(() => { document.title = (++k % 2) ? BASE_TITLE : '🔔 Your turn!'; }, 1000);
+  }
   // The game's public web address.
   const SITE_URL = 'https://streakorbust.com/';
   // Running inside the App Store app (Capacitor) rather than a browser.
@@ -219,6 +234,13 @@
         break;
       case 'roundEnd': {
         const x = X(), rows = ev.summary.rows;
+        x.st = x.st || {};
+        rows.forEach((r) => {
+          const t = x.st[r.i] || (x.st[r.i] = { best: 0, sweeps: 0, busts: 0 });
+          t.best = Math.max(t.best, r.score);
+          if (r.busted) t.busts++;
+          if (r.bonus) t.sweeps++;
+        });
         const best = rows.slice().sort((a, b) => b.score - a.score)[0];
         if (best.score > 0) {
           moment(best.score * 0.9, `💰 ${nm(best.i)} banked ${best.score}`);
@@ -250,7 +272,7 @@
     document.body.appendChild(el);
     hideReveal(false);
     const dx = b.left + b.width / 2 - (a.left + a.width / 2), dy = b.top + b.height / 2 - (a.top + a.height / 2);
-    const anim = el.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(.25) rotate(-8deg)`, opacity: 0.6 }], { duration: 460, easing: 'cubic-bezier(.4, 0, .2, 1)' });
+    const anim = el.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) scale(.25) rotate(-8deg)`, opacity: 0.6 }], { duration: 340, easing: 'cubic-bezier(.4, 0, .2, 1)' });
     anim.onfinish = () => {
       el.remove();
       const c = playerEl(i);
@@ -564,7 +586,7 @@
         focusP = (ev.dealer + 1) % s.players.length;
         render(s, focusP);
         banner(`Round ${ev.round}`, `${s.players[ev.dealer].name} deals`, '#1677c9');
-        await sleep(1100);
+        await sleep(750);
         break;
       }
       case 'reshuffle':
@@ -577,7 +599,7 @@
           if (mode === 'local') banner(s.players[ev.p].name, 'Your turn', pc(ev.p));
           else if (ev.p === mySeat) banner('Your turn', s.players[ev.p].name, pc(ev.p));
           else banner(s.players[ev.p].name, 'is up', pc(ev.p));
-          await sleep(500);
+          await sleep(260);
         }
         lastTurnP = ev.p;
         break;
@@ -586,55 +608,55 @@
         dealing = ev.deal;
         render(s, ev.p);
         showReveal(ev.card);
-        await sleep(ev.deal ? 560 : 680);
+        await sleep(ev.deal ? 360 : 440);
         break;
       case 'place':
         if (dealing) flyToChip(ev.card, ev.p); else hideReveal(true);
         render(s, ev.p, ev.card.id);
         if (ev.card.kind === 'shield') toast(`${nm(ev.p)} is holding a Lifeline`);
-        await sleep(ev.card.kind === 'num' ? 300 : 500);
+        await sleep(ev.card.kind === 'num' ? 180 : 320);
         break;
       case 'bust': {
         // The duplicate swells and glows red, then splits and the halves drift apart; the hand
         // pulses red under a BUST stamp.
         $('#reveal').classList.add('busting');
         flash('red');
-        await sleep(420);
+        await sleep(340);
         shatterReveal();
         render(s, ev.p, ev.card.id);
         const seat = $(`#seats .seat[data-i="${ev.p}"]`);
         if (seat) seat.classList.add('busting');
         stamp('BUST!', 'bust', `Another ${ev.card.value}`, ev.p);
-        await sleep(1150);
+        await sleep(850);
         break;
       }
       case 'saved':
         stamp('SAVED!', 'saved', 'Lifeline used up', ev.p);
         toast(`A Lifeline saved ${nm(ev.p)}`);
         flash('gold');
-        await sleep(700);
+        await sleep(500);
         hideReveal(true);
         render(s, ev.p);
-        await sleep(700);
+        await sleep(450);
         break;
       case 'sweep':
         hideReveal(true);
         render(s, ev.p, ev.card.id);
         stamp('CLEAN SWEEP!', 'sweep', '+15 bonus', ev.p);
         flash('gold'); fx.burst(200);
-        await sleep(2100);
+        await sleep(1700);
         break;
       case 'setAside':
         toast(`${ACTION_NAME[ev.card.kind]} waits until these 3 cards are done`);
-        await sleep(800);
+        await sleep(550);
         hideReveal(true);
-        await sleep(250);
+        await sleep(180);
         break;
       case 'chooseTarget':
         // The picker that follows says once, clearly, who drew the card.
-        await sleep(700);
+        await sleep(450);
         hideReveal(true);
-        await sleep(250);
+        await sleep(160);
         break;
       case 'lock': {
         hideReveal(true);
@@ -646,7 +668,7 @@
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take it. Chilled with ${pts}`
           : ev.t === ev.p ? `${nm(ev.t)} chilled themselves with ${pts}` : `${nm(ev.p)} chilled ${nm(ev.t)}, who keeps ${pts}`, 2400);
-        await sleep(1500);
+        await sleep(1050);
         break;
       }
       case 'rush':
@@ -657,36 +679,36 @@
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take 3 cards!`
           : ev.t === ev.p ? `${nm(ev.t)} takes the Hat Trick: 3 cards in a row!` : `${nm(ev.p)} makes ${nm(ev.t)} take 3 cards!`, 2200);
-        await sleep(1400);
+        await sleep(1000);
         break;
       case 'rushDone':
-        await sleep(150);
+        await sleep(100);
         break;
       case 'giveShield':
         hideReveal(true);
         render(s, ev.t, ev.card.id);
         toast(`${nm(ev.p)} already had one, so ${nm(ev.t)} gets the Lifeline`, 2200);
-        await sleep(1100);
+        await sleep(750);
         break;
       case 'discardAction':
         hideReveal(true);
         toast(ev.extra ? `${nm(ev.p)} already has a Lifeline, so the extra one is discarded` : `Nobody can take the ${ACTION_NAME[ev.card.kind]}, so it's discarded`);
-        await sleep(1000);
+        await sleep(700);
         break;
       case 'stay':
         render(s, ev.p);
         toast(ev.forced ? `Out of cards, so ${nm(ev.p)} closes` : `${nm(ev.p)} closes with <b>${breakdown(s.players[ev.p]).score}</b>`);
-        await sleep(750);
+        await sleep(450);
         break;
       case 'skip':
         render(s, ev.p);
         toast(`${nm(ev.p)} skips this turn`);
-        await sleep(650);
+        await sleep(400);
         break;
       case 'roundEnd':
         hideReveal(false);
         render(s, focusP);
-        await sleep(450);
+        await sleep(320);
         break;
     }
   }
@@ -714,12 +736,14 @@
     const a = s.awaiting;
     if (a && a.p != null) focusP = a.p;
     render(s, focusP);
-    if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); }
+    if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); recordStats(s); }
     if (mode === 'local') store.set(SAVE, s); else if (mode === 'host') { saveHosted(); hostWatch(); }
     // Left for the home screen while animations were finishing: keep the save, but don't pop
     // in-game sheets over the menu. Continue picks up from here.
     if (!$('#table').classList.contains('active')) { heart.stop(); return; }
     if (!a) return;
+    const myMove = mode !== 'local' && a.p === mySeat && (a.type === 'decide' || a.type === 'target');
+    if (myMove && document.hidden) nudge(true); else if (!myMove) nudge(false);
     if (a.type === 'decide' && isMine(a.p)) {
       const n = numsOf(s.players[a.p]);
       heart.set(n >= 6 ? 650 : n === 5 ? 900 : 0);
@@ -969,7 +993,7 @@
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
-    openModal(RULES_HTML, (m) => m.querySelector('#mOk').addEventListener('click', backToTable), '', backToTable);
+    openModal(RULES_HTML, (m) => m.querySelector('#mOk').addEventListener('click', backToTable), 'rules-sheet', backToTable);
   }
 
   function showMenu() {
@@ -1021,6 +1045,7 @@
         <span class="rs-go" aria-hidden="true">▶</span>`;
     }
     renderRecap(canResume);
+    renderStatsBtn();
     renderNames();
     renderOnlineHome();
   }
@@ -1034,6 +1059,46 @@
   }
 
   // Trophy, winner line, and a score bar per player; Play again starts a rematch (only when no game is saved).
+  // ---------------- friend stats ----------------
+  // Kept on this phone by player name (default "Player 2" style names are skipped).
+  const statKey = (n) => String(n || '').trim().toLowerCase();
+  function recordStats(s) {
+    const all = store.get(STATS) || {};
+    const st = (X().st) || {};
+    s.players.forEach((p, i) => {
+      if (!p.name || /^player \d+$/i.test(p.name.trim())) return;
+      const k = statKey(p.name);
+      const r = all[k] || (all[k] = { name: p.name, games: 0, wins: 0, best: 0, sweeps: 0, busts: 0 });
+      r.name = p.name;
+      r.games++;
+      if (i === s.winner) r.wins++;
+      const t = st[i] || {};
+      r.best = Math.max(r.best, t.best || 0);
+      r.sweeps += t.sweeps || 0;
+      r.busts += t.busts || 0;
+    });
+    store.set(STATS, all);
+  }
+  function showStats() {
+    const rows = Object.values(store.get(STATS) || {}).sort((a, b) => b.wins - a.wins || (b.wins / b.games) - (a.wins / a.games) || b.games - a.games);
+    const body = rows.length
+      ? `<div class="stats"><div class="st-row st-head"><span>Player</span><span>Wins</span><span>Win %</span><span>Best round</span><span>Sweeps</span></div>
+        ${rows.map((r, k) => `<div class="st-row"><span class="st-name">${k === 0 && r.wins ? '👑 ' : ''}${esc(r.name)}<small>${r.games} game${r.games === 1 ? '' : 's'}</small></span>
+          <span class="st-big">${r.wins}</span><span>${Math.round((r.wins / Math.max(1, r.games)) * 100)}%</span><span>${r.best}</span><span>${r.sweeps}</span></div>`).join('')}</div>`
+      : '<p>No finished games yet. Play a game to the end and the scoreboard starts here.</p>';
+    openModal(`<h2>Friend stats</h2><p class="st-note">Every finished game on this phone, by player name.</p>${body}
+      <div class="mbtns">${rows.length ? '<button class="btn ghost" id="mReset">Reset stats</button>' : ''}<button class="btn primary" id="mOk">Done</button></div>`, (m) => {
+      m.querySelector('#mOk').onclick = closeModal;
+      const rs = m.querySelector('#mReset');
+      if (rs) rs.onclick = () => openModal(`<h2>Reset friend stats?</h2><p>All wins and records on this phone will be erased.</p>
+        <div class="mbtns"><button class="btn pink" id="mYes">Reset</button><button class="btn ghost" id="mNo">Keep them</button></div>`, (mm) => {
+        mm.querySelector('#mYes').onclick = () => { store.del(STATS); closeModal(); renderStatsBtn(); };
+        mm.querySelector('#mNo').onclick = showStats;
+      }, '', showStats);
+    }, 'stats-sheet', closeModal);
+  }
+  function renderStatsBtn() { $('#btnStats').classList.toggle('hidden', !Object.keys(store.get(STATS) || {}).length); }
+
   function renderRecap(hasSave) {
     const box = $('#recap');
     const last = store.get(LAST);
@@ -1043,7 +1108,7 @@
     const top = Math.max(1, ranked[0].total);
     const winner = last.players[last.winner] || ranked[0];
     box.innerHTML = `<div class="rc-head"><span class="rc-trophy" aria-hidden="true">🏆</span>
-        <div class="rc-txt"><div class="rc-title"><b style="color:${pc(winner.i)}">${esc(winner.name)}</b> won last game!</div></div>
+        <div class="rc-txt"><div class="rc-title"><b style="color:${pc(winner.i)}">${esc(winner.name)}</b> won last game!</div><div class="rc-sub">Played to ${last.target}</div></div>
         ${hasSave ? '' : '<button class="rc-again" id="btnPlayAgain">Play again</button>'}</div>
       <div class="rc-rows">${ranked.map((p) => `<div class="rc-row" style="--pc:${pc(p.i)}"><span class="rc-name">${esc(p.name)}</span>
         <span class="rc-bar"><i data-w="${Math.round((p.total / top) * 100)}"></i></span><span class="rc-pts">${p.total}</span></div>`).join('')}</div>`;
@@ -1091,6 +1156,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
+      nudge(false);
       if (mode !== 'local') Net.wake();
       if (game) {
         keepAwake();
@@ -1194,7 +1260,7 @@
   // While someone's phone is disconnected, the host's phone plays their turns right away with a
   // simple bot (they're tagged BOT). When they reconnect they're tagged REJOINING, and they take
   // over again at the start of their next turn. Gone 3+ minutes: they sit out from the next round.
-  const BOT_DELAY_MS = 1300;
+  const BOT_DELAY_MS = 900;
   const SIT_OUT_MS = 3 * 60000;
   let botTimer = null;
   let botKey = null;
@@ -1715,6 +1781,7 @@
     settle();
   };
   $('#btnRules').onclick = showRules;
+  $('#btnStats').onclick = showStats;
   $('#btnEndSaved').onclick = () => {
     openModal(`<h2>End this game and start a new one?</h2><p>The current scores will be lost.</p>
       <div class="mbtns"><button class="btn pink" id="mYes">End it and start new</button><button class="btn ghost" id="mNo">Keep playing this one</button></div>`, (m) => {

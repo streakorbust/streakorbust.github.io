@@ -1,6 +1,6 @@
 // Offline support: try the network first (so updates arrive automatically),
 // fall back to the cached copy when offline or slow.
-const VERSION = 'streakorbust-v30';
+const VERSION = 'streakorbust-v31';
 const FILES = ['./', 'index.html', 'styles.css', 'engine.js', 'app.js', 'net.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -13,6 +13,7 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).pathname === '/turn') return; // relay passes are short-lived: never cache
   e.respondWith((async () => {
     const cache = await caches.open(VERSION);
     const cached = await cache.match(e.request, { ignoreSearch: true });

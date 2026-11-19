@@ -145,7 +145,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 /* ---------- reveal ---------- */
 #reveal { position: absolute; left: 50%; top: 46%; width: 56%; max-width: 180px; transform: translate(-50%, -50%); pointer-events: none; perspective: 900px; z-index: 5; }
-#reveal .flipper { position: relative; width: 100%; aspect-ratio: 5 / 7; transform-style: preserve-3d; animation: flyflip .5s cubic-bezier(.3, .8, .3, 1) both; }
+#reveal .flipper { position: relative; width: 100%; aspect-ratio: 5 / 7; transform-style: preserve-3d; animation: flyflip .38s cubic-bezier(.3, .8, .3, 1) both; }
 #reveal .flipper > .card { position: absolute; inset: 0; width: 100%; backface-visibility: hidden; -webkit-backface-visibility: hidden; box-shadow: var(--shadow-lg); }
 #reveal .flipper > .card.back { transform: rotateY(180deg); }
 #reveal.out .flipper { animation: flyout .3s cubic-bezier(.4, 0, .2, 1) forwards; }
@@ -501,7 +501,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 /* ---------- smoother turn changes ---------- */
 .seat { transition: opacity .45s ease, filter .45s ease, border-color .4s ease, background .4s ease, box-shadow .4s ease; }
 #turnPill { transition: background-color .4s ease, box-shadow .4s ease; }
-#banner.show { animation: bannerSoft 1.25s cubic-bezier(.25, .8, .35, 1) forwards; }
+#banner.show { animation: bannerSoft .9s cubic-bezier(.25, .8, .35, 1) forwards; }
 @keyframes bannerSoft {
   0% { opacity: 0; transform: scale(.96); }
   20% { opacity: 1; transform: scale(1); }
@@ -745,3 +745,20 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
   border-radius: 50%; background: var(--soft); color: var(--ink2); font-size: 16px; font-weight: 700; box-shadow: 0 1px 4px rgba(15, 42, 68, .12); }
 #modal .mclose:active { transform: scale(.92); }
 #modal.dismissable h2 { padding-right: 40px; }
+
+/* How to play: close by swiping down or Got it, no X. */
+#modal.rules-sheet .mclose { display: none; }
+#modal.rules-sheet h2 { padding-right: 0; }
+
+/* ---------- friend stats ---------- */
+.home-links { display: flex; justify-content: center; gap: 4px; }
+.home-links .hidden { display: none; }
+.st-note { margin-top: 0 !important; }
+.stats { display: flex; flex-direction: column; gap: 6px; margin: 6px 0 16px; }
+.st-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px 48px 56px 50px; gap: 4px; align-items: center; padding: 10px 10px; border-radius: 12px; background: var(--soft); text-align: center; font-size: 15px; font-weight: 600; color: var(--ink2); }
+.st-row.st-head { background: none; padding: 0 10px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.st-row > span:first-child { text-align: left; }
+.st-name { min-width: 0; color: var(--ink); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-name small { display: block; font-size: 12px; font-weight: 500; color: var(--muted); }
+.st-big { font-size: 20px; font-weight: 800; color: var(--ink); }
+@media (max-width: 360px) { .st-row { grid-template-columns: minmax(0, 1fr) 38px 42px 48px 44px; font-size: 14px; padding: 9px 8px; } }
