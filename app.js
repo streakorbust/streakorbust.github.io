@@ -17,8 +17,7 @@
   const LAST = 'streakorbust.last.v1'; // summary of the most recent finished game, for the home-screen recap
   const PREFS = 'streakorbust.prefs.v1';
   const HOSTED = 'streakorbust.hosted.v1'; // online game this phone is hosting, so the room can be reopened
-  const ROOM = 'streakorbust.room.v1';
-  const STATS = 'streakorbust.stats.v1'; // friend stats on this phone, by player name // online room this phone joined as a guest, for one-tap rejoin
+  const ROOM = 'streakorbust.room.v1'; // online room this phone joined as a guest, for one-tap rejoin
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* private mode */ } },
@@ -234,13 +233,6 @@
         break;
       case 'roundEnd': {
         const x = X(), rows = ev.summary.rows;
-        x.st = x.st || {};
-        rows.forEach((r) => {
-          const t = x.st[r.i] || (x.st[r.i] = { best: 0, sweeps: 0, busts: 0 });
-          t.best = Math.max(t.best, r.score);
-          if (r.busted) t.busts++;
-          if (r.bonus) t.sweeps++;
-        });
         const best = rows.slice().sort((a, b) => b.score - a.score)[0];
         if (best.score > 0) {
           moment(best.score * 0.9, `💰 ${nm(best.i)} banked ${best.score}`);
@@ -736,7 +728,7 @@
     const a = s.awaiting;
     if (a && a.p != null) focusP = a.p;
     render(s, focusP);
-    if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); recordStats(s); }
+    if (s.phase === 'over' && !X().recorded) { X().recorded = true; recordLastGame(s); }
     if (mode === 'local') store.set(SAVE, s); else if (mode === 'host') { saveHosted(); hostWatch(); }
     // Left for the home screen while animations were finishing: keep the save, but don't pop
     // in-game sheets over the menu. Continue picks up from here.
@@ -960,7 +952,7 @@
       </ol>
       <div class="bust-ex">
         <div class="minis">${cardHTML(N(3))}${cardHTML(N(7))}${cardHTML(N(10))}<span class="plus">+</span>${cardHTML(N(7), 'bustcard')}</div>
-        <p>You have 3, 7 and 10. You flip another 7, so you bust.</p>
+        <p>You have 3, 7, and 10. You flip another 7, so you bust.</p>
       </div>
       <p class="trick">The more you flip, the more points you can get, but the bigger the chance of busting. Know when to stop!</p>
     </div>
@@ -982,7 +974,7 @@
     <h3>More to know</h3><ul>
       <li><b>Skip</b>: pass your turn without flipping, once per round.</li>
       <li><b>Undo</b>: tapped Close by mistake? You have 5 seconds to take it back.</li>
-      <li>Everyone gets one card to start. The round ends when everyone has closed, busted or been chilled.</li>
+      <li>Everyone gets one card to start. The round ends when everyone has closed, busted, or been chilled.</li>
       <li>When someone reaches the target at the end of a round, the highest score wins. A tie keeps playing.</li>
       <li>The deck has 94 cards. When it runs out, the discards get shuffled into a new deck.</li></ul>
 
@@ -1045,7 +1037,6 @@
         <span class="rs-go" aria-hidden="true">▶</span>`;
     }
     renderRecap(canResume);
-    renderStatsBtn();
     renderNames();
     renderOnlineHome();
   }
@@ -1059,46 +1050,6 @@
   }
 
   // Trophy, winner line, and a score bar per player; Play again starts a rematch (only when no game is saved).
-  // ---------------- friend stats ----------------
-  // Kept on this phone by player name (default "Player 2" style names are skipped).
-  const statKey = (n) => String(n || '').trim().toLowerCase();
-  function recordStats(s) {
-    const all = store.get(STATS) || {};
-    const st = (X().st) || {};
-    s.players.forEach((p, i) => {
-      if (!p.name || /^player \d+$/i.test(p.name.trim())) return;
-      const k = statKey(p.name);
-      const r = all[k] || (all[k] = { name: p.name, games: 0, wins: 0, best: 0, sweeps: 0, busts: 0 });
-      r.name = p.name;
-      r.games++;
-      if (i === s.winner) r.wins++;
-      const t = st[i] || {};
-      r.best = Math.max(r.best, t.best || 0);
-      r.sweeps += t.sweeps || 0;
-      r.busts += t.busts || 0;
-    });
-    store.set(STATS, all);
-  }
-  function showStats() {
-    const rows = Object.values(store.get(STATS) || {}).sort((a, b) => b.wins - a.wins || (b.wins / b.games) - (a.wins / a.games) || b.games - a.games);
-    const body = rows.length
-      ? `<div class="stats"><div class="st-row st-head"><span>Player</span><span>Wins</span><span>Win %</span><span>Best round</span><span>Sweeps</span></div>
-        ${rows.map((r, k) => `<div class="st-row"><span class="st-name">${k === 0 && r.wins ? '👑 ' : ''}${esc(r.name)}<small>${r.games} game${r.games === 1 ? '' : 's'}</small></span>
-          <span class="st-big">${r.wins}</span><span>${Math.round((r.wins / Math.max(1, r.games)) * 100)}%</span><span>${r.best}</span><span>${r.sweeps}</span></div>`).join('')}</div>`
-      : '<p>No finished games yet. Play a game to the end and the scoreboard starts here.</p>';
-    openModal(`<h2>Friend stats</h2><p class="st-note">Every finished game on this phone, by player name.</p>${body}
-      <div class="mbtns">${rows.length ? '<button class="btn ghost" id="mReset">Reset stats</button>' : ''}<button class="btn primary" id="mOk">Done</button></div>`, (m) => {
-      m.querySelector('#mOk').onclick = closeModal;
-      const rs = m.querySelector('#mReset');
-      if (rs) rs.onclick = () => openModal(`<h2>Reset friend stats?</h2><p>All wins and records on this phone will be erased.</p>
-        <div class="mbtns"><button class="btn pink" id="mYes">Reset</button><button class="btn ghost" id="mNo">Keep them</button></div>`, (mm) => {
-        mm.querySelector('#mYes').onclick = () => { store.del(STATS); closeModal(); renderStatsBtn(); };
-        mm.querySelector('#mNo').onclick = showStats;
-      }, '', showStats);
-    }, 'stats-sheet', closeModal);
-  }
-  function renderStatsBtn() { $('#btnStats').classList.toggle('hidden', !Object.keys(store.get(STATS) || {}).length); }
-
   function renderRecap(hasSave) {
     const box = $('#recap');
     const last = store.get(LAST);
@@ -1781,7 +1732,6 @@
     settle();
   };
   $('#btnRules').onclick = showRules;
-  $('#btnStats').onclick = showStats;
   $('#btnEndSaved').onclick = () => {
     openModal(`<h2>End this game and start a new one?</h2><p>The current scores will be lost.</p>
       <div class="mbtns"><button class="btn pink" id="mYes">End it and start new</button><button class="btn ghost" id="mNo">Keep playing this one</button></div>`, (m) => {
