@@ -1,0 +1,11 @@
+{
+  "appId": "io.github.streakorbust",
+  "appName": "Streak or Bust",
+  "webDir": "www",
+  "backgroundColor": "#c4ecfa",
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#c4ecfa",
+    "scrollEnabled": false
+  }
+}

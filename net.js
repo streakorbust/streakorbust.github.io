@@ -4,7 +4,8 @@
 (function (global) {
   'use strict';
 
-  const PEERJS_URL = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+  // The App Store app ships its own copy of PeerJS (no code loaded from the internet); the website uses the CDN.
+  const PEERJS_URL = global.Capacitor ? 'peerjs.min.js' : 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
   const PREFIX = 'streakorbust-room-';
   const ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ'; // no vowels: codes never spell words, no 0/O or 1/I mixups
   const newCode = () => Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');

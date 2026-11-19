@@ -48,6 +48,8 @@
   let guestX = null; // guests keep their own badges/moments (the host's aren't sent)
   let pendingAct = null; // guest: waiting for the host to apply our move
   const isMine = (i) => mode === 'local' || i === mySeat;
+  // Running inside the App Store app (Capacitor) rather than a browser.
+  const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
   // ---------------- card art ----------------
   const arm = (k) => `<g transform="rotate(${k * 60} 32 32)"><path d="M32 32V6M25 12l7 6.5 7-6.5M27.5 21.5l4.5 3.5 4.5-3.5"/></g>`;
@@ -1404,7 +1406,8 @@
     $('#lbStart').disabled = list.length < 2;
   }
 
-  const roomLink = () => `${location.origin}${location.pathname}?room=${Net.code}`;
+  // In the App Store app, links point at the website so friends without the app can join too.
+  const roomLink = () => `${NATIVE ? 'https://streakorbust.github.io/' : location.origin + location.pathname}?room=${Net.code}`;
   async function invite() {
     const url = roomLink();
     try {
@@ -1714,7 +1717,7 @@
   const installed = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
   const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   let installEvt = null;
-  function showInstallBtn() { $('#btnInstall').classList.toggle('hidden', installed() || !(installEvt || isIOS)); }
+  function showInstallBtn() { $('#btnInstall').classList.toggle('hidden', NATIVE || installed() || !(installEvt || isIOS)); }
   addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installEvt = e; showInstallBtn(); });
   addEventListener('appinstalled', () => { installEvt = null; showInstallBtn(); toast('Installed! Open Streak or Bust from your home screen'); });
   const shareIcon = '<svg class="ios-share" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4M7 11H5v10h14V11h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
