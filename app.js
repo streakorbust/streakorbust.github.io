@@ -988,7 +988,7 @@
 
     <h3>Playing online</h3><ul>
       <li><b>Lost your connection?</b> A bot plays your turns for up to 2 minutes, so nobody has to wait.</li>
-      <li><b>Gone longer than that?</b> The bot stops and you sit out, with your score frozen.</li>
+      <li><b>Gone longer than that?</b> The bot finishes any move it's in the middle of, then stops. You sit out, with your score frozen.</li>
       <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;

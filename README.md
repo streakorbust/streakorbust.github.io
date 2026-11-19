@@ -25,7 +25,8 @@ One-phone games work offline once installed.
 
 - Hosted on **Cloudflare Pages** (project `streakorbust`) at streakorbust.com (also streakorbust.pages.dev), deployed automatically from the `main` branch. No build step.
 - The old address, streakorbust.github.io, is served from the `gh-pages` branch: a tiny page that forwards to streakorbust.com (keeping `?room=` invites) and clears old offline copies.
-- To ship an update: commit, bump `VERSION` in `sw.js`, push to `main`.
+- To ship an update: run `python scripts/bump-version.py` (bumps sw.js VERSION and the ?v= tags on CSS/JS), commit, push to `main`.
+- `_headers` makes browsers re-check the game files on every visit, so an update never shows new HTML with old styles.
 
 ## Files
 

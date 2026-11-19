@@ -1,0 +1,22 @@
+# Cloudflare Pages response headers.
+# The game's own files must be re-checked on every visit, otherwise browsers keep an old copy of
+# the styles or code for hours after an update and the page looks broken. "no-cache" still lets
+# the browser reuse its copy when nothing changed (it just asks first), so it stays fast.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/styles.css
+  Cache-Control: no-cache
+/app.js
+  Cache-Control: no-cache
+/engine.js
+  Cache-Control: no-cache
+/net.js
+  Cache-Control: no-cache
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+/privacy
+  Cache-Control: no-cache

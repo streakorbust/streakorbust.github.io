@@ -1,6 +1,6 @@
 // Offline support: try the network first (so updates arrive automatically),
 // fall back to the cached copy when offline or slow.
-const VERSION = 'streakorbust-v48';
+const VERSION = 'streakorbust-v49';
 const FILES = ['./', 'index.html', 'styles.css', 'engine.js', 'app.js', 'net.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
