@@ -48,6 +48,8 @@
   let guestX = null; // guests keep their own badges/moments (the host's aren't sent)
   let pendingAct = null; // guest: waiting for the host to apply our move
   const isMine = (i) => mode === 'local' || i === mySeat;
+  // The game's public web address (switch to https://streakorbust.com/ once the domain is attached).
+  const SITE_URL = 'https://streakorbust.pages.dev/';
   // Running inside the App Store app (Capacitor) rather than a browser.
   const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
@@ -1407,7 +1409,7 @@
   }
 
   // In the App Store app, links point at the website so friends without the app can join too.
-  const roomLink = () => `${NATIVE ? 'https://streakorbust.github.io/' : location.origin + location.pathname}?room=${Net.code}`;
+  const roomLink = () => `${NATIVE ? SITE_URL : location.origin + location.pathname}?room=${Net.code}`;
   async function invite() {
     const url = roomLink();
     try {
