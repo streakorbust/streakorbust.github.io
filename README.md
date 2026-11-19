@@ -1,6 +1,6 @@
 # Streak or Bust
 
-**Play:** https://streakorbust.pages.dev/
+**Play:** https://streakorbust.com/
 
 A push-your-luck card game for 2 to 4 players. Play live online with friends (each on their own phone), or pass one phone around. It installs as an app from the browser, with no App Store needed.
 
@@ -23,8 +23,8 @@ One-phone games work offline once installed.
 
 ## Hosting
 
-- Hosted on **Cloudflare Pages** (project `streakorbust`), deployed automatically from the `main` branch. No build step.
-- The old address, streakorbust.github.io, is served from the `gh-pages` branch: a tiny page that forwards to the new address (keeping `?room=` invites) and clears old offline copies.
+- Hosted on **Cloudflare Pages** (project `streakorbust`) at streakorbust.com (also streakorbust.pages.dev), deployed automatically from the `main` branch. No build step.
+- The old address, streakorbust.github.io, is served from the `gh-pages` branch: a tiny page that forwards to streakorbust.com (keeping `?room=` invites) and clears old offline copies.
 - To ship an update: commit, bump `VERSION` in `sw.js`, push to `main`.
 
 ## Files

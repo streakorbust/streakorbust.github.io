@@ -48,8 +48,8 @@
   let guestX = null; // guests keep their own badges/moments (the host's aren't sent)
   let pendingAct = null; // guest: waiting for the host to apply our move
   const isMine = (i) => mode === 'local' || i === mySeat;
-  // The game's public web address (switch to https://streakorbust.com/ once the domain is attached).
-  const SITE_URL = 'https://streakorbust.pages.dev/';
+  // The game's public web address.
+  const SITE_URL = 'https://streakorbust.com/';
   // Running inside the App Store app (Capacitor) rather than a browser.
   const NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 
