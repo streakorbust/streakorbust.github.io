@@ -946,45 +946,49 @@
 
   const N = (v) => ({ kind: 'num', value: v });
   const RULES_HTML = `<h2>How to play</h2><div class="rules">
+    <p class="lead">Flip cards, build your streak, and stop before you bust. Easy to learn, hard to put down.</p>
     <div class="basics">
-      <p class="goal">🏆 First to <b>200 points</b> wins.<small> Or pick your own target.</small></p>
+      <p class="goal">🏆 First to <b>200 points</b> wins.<small> Or set your own target.</small></p>
       <ol class="steps3">
-        <li><span class="n">1</span><span>On your turn, <b>Flip</b> a card. Each new number adds points.</span></li>
-        <li><span class="n">2</span><span>Flip a number you <b>already have</b> and you <b>bust</b>. You lose this round's numbers.</span></li>
-        <li><span class="n">3</span><span><b>Close</b> any time to stop and keep your points for the round.</span></li>
+        <li><span class="n">1</span><span><b>Flip</b> a card on your turn. Every new number adds to your score.</span></li>
+        <li><span class="n">2</span><span>Flip a number you <b>already have</b> and you <b>bust</b>. Your numbers for this round are gone.</span></li>
+        <li><span class="n">3</span><span><b>Close</b> whenever you like to lock in your points for the round.</span></li>
       </ol>
       <div class="bust-ex">
         <div class="minis">${cardHTML(N(3))}${cardHTML(N(7))}${cardHTML(N(10))}<span class="plus">+</span>${cardHTML(N(7), 'bustcard')}</div>
-        <p>You have 3, 7, and 10. You flip another 7, so you bust.</p>
+        <p>You have 3, 7, and 10. Then another 7 shows up. Bust!</p>
       </div>
-      <p class="trick">The more you flip, the more points you can get, but the bigger the chance of busting. Know when to stop!</p>
+      <p class="trick">Every flip could be your best card or your last. How far will you push it?</p>
     </div>
 
     <h3>Scoring</h3>
     <div class="minis">${cardHTML(N(3))}${cardHTML(N(9))}${cardHTML({ kind: 'x2' })}${cardHTML({ kind: 'mod', value: 4 })}</div>
-    <ul><li>Add up your numbers. A <b>×2</b> doubles your numbers only, not your + cards. Then add your <b>+ cards</b>.</li>
-      <li>So this hand is (3 + 9) × 2 + 4 = <b>28</b>.</li>
-      <li>If you bust, you still keep your + cards.</li>
-      <li><b>Clean Sweep</b>: get 7 different numbers and the round ends right away, with <b>+15</b> for you.</li></ul>
+    <ul><li>Add up your numbers, double them with a <b>×2</b>, then add your <b>+</b> cards.</li>
+      <li>This hand is worth (3 + 9) × 2 + 4 = <b>28</b>.</li>
+      <li>Busted? You still keep your + cards.</li>
+      <li>Get 7 different numbers for a <b>Clean Sweep</b>. The round ends right away, and you get <b>+15</b>.</li></ul>
 
     <h3>Action cards</h3>
     <div class="minis">${cardHTML({ kind: 'lock' })}${cardHTML({ kind: 'rush' })}${cardHTML({ kind: 'shield' })}</div>
-    <ul><li><b>Chill</b>: pick a player who's still in, including yourself. They keep their points but they're done for the round.</li>
-      <li><b>Hat Trick</b>: pick a player who's still in. They have to flip 3 cards in a row.</li>
-      <li><b>Lifeline</b>: keep it. It saves you from one bust. Keep every Lifeline you draw.</li>
-      <li>If you're the only one left in the round, Chill and Hat Trick go to you.</li></ul>
+    <ul><li><b>Chill</b>: pick anyone still in, even yourself. They keep their points and sit out the rest of the round.</li>
+      <li><b>Hat Trick</b>: pick anyone still in. They have to flip 3 cards in a row.</li>
+      <li><b>Lifeline</b>: keep it. It saves you from one bust. Collect as many as you can.</li>
+      <li>Last one in? Chill and Hat Trick have to go to you.</li></ul>
 
-    <h3>More to know</h3><ul>
+    <h3>How a round goes</h3><ul>
+      <li>Everyone starts with one card, then you take turns.</li>
+      <li>The round ends when everyone has closed, busted, or been chilled.</li>
+      <li>Once someone reaches the target, the highest score wins. Tied? Keep playing.</li></ul>
+
+    <h3>Handy extras</h3><ul>
       <li><b>Skip</b>: pass your turn without flipping, once per round.</li>
-      <li><b>Undo</b>: tapped Close by mistake? You have 5 seconds to take it back.</li>
-      <li>Everyone gets one card to start. The round ends when everyone has closed, busted, or been chilled.</li>
-      <li>When someone reaches the target at the end of a round, the highest score wins. A tie keeps playing.</li>
-      <li>The deck has 94 cards. When it runs out, the discards get shuffled into a new deck.</li></ul>
+      <li><b>Undo</b>: closed by mistake? You have 5 seconds to take it back.</li>
+      <li>Out of cards? The discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li><b>If you drop out</b>, a bot plays your turns so nobody has to wait. Your points can still go up or down.</li>
-      <li><b>After 2 minutes away</b>, the bot stops and you sit out. You get no cards, and your score is frozen. This keeps a bot from playing the whole game for someone who left.</li>
-      <li><b>Coming back?</b> Tap <b>Rejoin</b>. Within 2 minutes, you take over on your next turn. After that, you're dealt back in next round.</li>
+      <li>Lost your connection? A bot plays your turns until you're back, so nobody has to wait.</li>
+      <li>Gone more than 2 minutes? You sit out with your score frozen until you return.</li>
+      <li>Tap <b>Rejoin</b> to jump back in.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
