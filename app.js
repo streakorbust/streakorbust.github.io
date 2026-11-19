@@ -983,8 +983,8 @@
 
     <h3>Playing online</h3><ul>
       <li><b>If you drop out</b>, a bot plays your turns so nobody has to wait. Your points can still go up or down.</li>
-      <li><b>After 3 minutes away</b>, the bot stops and you sit out. You get no cards, and your score is frozen. This keeps a bot from playing the whole game for someone who left.</li>
-      <li><b>Coming back?</b> Tap <b>Rejoin</b>. Within 3 minutes, you take over on your next turn. After that, you're dealt back in next round.</li>
+      <li><b>After 2 minutes away</b>, the bot stops and you sit out. You get no cards, and your score is frozen. This keeps a bot from playing the whole game for someone who left.</li>
+      <li><b>Coming back?</b> Tap <b>Rejoin</b>. Within 2 minutes, you take over on your next turn. After that, you're dealt back in next round.</li>
       <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
@@ -1214,9 +1214,9 @@
   // ---------- away players: a bot plays for them ----------
   // While someone's phone is disconnected, the host's phone plays their turns right away with a
   // simple bot (they're tagged BOT). When they reconnect they're tagged REJOINING, and they take
-  // over again at the start of their next turn. Gone 3+ minutes: they sit out from the next round.
+  // over again at the start of their next turn. Gone 2+ minutes: they sit out from the next round.
   const BOT_DELAY_MS = 900;
-  const SIT_OUT_MS = 3 * 60000;
+  const SIT_OUT_MS = 2 * 60000;
   let botTimer = null;
   let botKey = null;
   let rejoining = []; // guests: seats whose player is back but waiting for their next turn
@@ -1295,7 +1295,7 @@
       if (!m.on && m.awaySince && Date.now() - m.awaySince >= SIT_OUT_MS && p && !p.out) {
         p.out = true;
         changed = true;
-        toast(`<b>${esc(m.name)}</b> has been gone 3 minutes and sits out until they're back`, 3200);
+        toast(`<b>${esc(m.name)}</b> has been gone 2 minutes and sits out until they're back`, 3200);
       }
     });
     if (changed) { saveHosted(); Net.broadcast({ t: 'sitout', out: game.s.players.map((p) => !!p.out) }); }
