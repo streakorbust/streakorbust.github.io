@@ -1048,6 +1048,7 @@
 
   function showSetup() {
     showScreen('setup');
+    letSleep();
     heart.stop();
     clearUndo();
     setHeat(0, false);
@@ -1139,14 +1140,21 @@
     pump();
   }
 
+  // Keep the screen on while playing, and in the waiting room so the room stays open for friends
+  // (a phone that locks pauses the page, and the room with it). Back on the home screen it's let go.
   let wakeLock = null;
   async function keepAwake() {
     try { if ('wakeLock' in navigator && !wakeLock) { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); } } catch (e) { /* not allowed */ }
+  }
+  function letSleep() {
+    try { if (wakeLock) wakeLock.release(); } catch (e) { /* already gone */ }
+    wakeLock = null;
   }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       nudge(false);
       if (mode !== 'local') Net.wake();
+      if ($('#lobby').classList.contains('active')) keepAwake();
       if (game) {
         keepAwake();
         const a = game.s.awaiting;
@@ -1896,6 +1904,7 @@
   // ---------- lobby ----------
   function showLobby() {
     showScreen('lobby');
+    keepAwake();
     renderLobby();
   }
   function renderLobby() {
