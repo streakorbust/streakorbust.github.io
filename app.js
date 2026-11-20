@@ -1496,16 +1496,19 @@
       if (soloShown) { soloShown = false; if ($('#modal').querySelector('#mSoloEnd')) closeModal(); if (!busy) settle(); toast('Back to the game!', 1800); }
       return;
     }
-    if (soloShown && $('#modal').querySelector('#mSoloEnd')) return; // already showing
+    const clk = $('#modal').querySelector('#soloClock');
+    if (soloShown && clk) { clk.textContent = clock(Date.now() - soloSince); return; } // already showing: tick the timer
     if (busy || !$('#table').classList.contains('active')) return;
+    if (!soloShown) soloSince = Date.now();
     soloShown = true;
     const gone = game.s.players.filter((pl, i) => i !== mySeat && pl.out && pl.status === 'sitout').map((pl) => `<b>${esc(pl.name)}</b>`);
-    openModal(`<h2>Waiting for players</h2><p>${andList(gone)} ${gone.length > 1 ? 'are' : 'is'} out of the game, and you need at least 2 players. The game is paused until someone's back. They can rejoin with room code <b>${esc(Net.code || '')}</b>.</p>
-      <div class="mbtns"><button class="btn primary" id="mSoloInvite">Invite friends</button><button class="btn ghost" id="mSoloEnd" style="color:var(--bad)">End the game</button></div>`, (m) => {
-      m.querySelector('#mSoloInvite').onclick = invite;
+    openModal(`<h2>Waiting for players</h2><p>${andList(gone)} ${gone.length > 1 ? 'are' : 'is'} out of the game, and you need at least 2 players. The game picks up as soon as someone rejoins with room code <b>${esc(Net.code || '')}</b>.</p>
+      <p class="solo-clock">Waiting <b id="soloClock">${clock(Date.now() - soloSince)}</b></p>
+      <div class="mbtns"><button class="btn ghost" id="mSoloEnd" style="color:var(--bad)">End the game</button></div>`, (m) => {
       m.querySelector('#mSoloEnd').onclick = () => { soloShown = false; leaveRoom(); };
     }, '', null);
   }
+  let soloSince = 0;
 
   // Host's phone came back online: friends' phones reconnect on their own within a few seconds,
   // so don't start the bot for them, and restart their away clocks from now.
