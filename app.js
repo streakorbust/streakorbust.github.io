@@ -598,6 +598,7 @@
     // touch of warm echo. Even the bad moments (a bust) are a gentle low "whoomp", not a buzz.
     let ctx = null;
     let out = null; // everything plays through here: soft filter + gentle echo
+    let dry = null; // clean path with no echo, for single tones that shouldn't repeat
     const on = () => prefs.sound !== false;
     const SCALE = [392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5]; // G A C D E G A C
     function ac() {
@@ -624,6 +625,12 @@
           echo.connect(echoSoft).connect(fb).connect(echo);
           echoSoft.connect(wet).connect(ctx.destination);
           out = master;
+          dry = ctx.createGain();
+          dry.gain.value = 0.55;
+          const drySoft = ctx.createBiquadFilter();
+          drySoft.type = 'lowpass';
+          drySoft.frequency.value = 3200;
+          dry.connect(drySoft).connect(ctx.destination);
         }
         if (ctx.state === 'suspended') ctx.resume();
       } catch (e) { ctx = null; }
@@ -642,7 +649,7 @@
       g.gain.setValueAtTime(0.0001, at);
       g.gain.exponentialRampToValueAtTime(vol, at + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-      g.connect(out);
+      g.connect(o.dry ? dry : out);
       const parts = o.bell ? [[1, 1], [2, 0.18], [3, 0.05]] : [[1, 1]];
       for (const [mult, level] of parts) {
         const osc = c.createOscillator();
@@ -698,8 +705,8 @@
     return {
       flip: () => play(() => air(0.14, { vol: 0.035, freq: 1600 })),
       // Each new number is the next note up the scale, so a growing hand climbs gently.
-      place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
-      bonus: () => play(() => tone(SCALE[6], 0.5, { vol: 0.065, bell: true })),
+      place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.45, { vol: 0.1, dry: true })),
+      bonus: () => play(() => tone(SCALE[6], 0.45, { vol: 0.075, dry: true })),
       // "Held breath": a warm, softly trembling chord (G and D) that swells in while the card turns.
       tense: () => {
         play(() => {
