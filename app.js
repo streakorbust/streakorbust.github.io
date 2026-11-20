@@ -699,7 +699,7 @@
       flip: () => play(() => air(0.14, { vol: 0.035, freq: 1600 })),
       // Each new number is the next note up the scale, so a growing hand climbs gently.
       place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
-      bonus: () => play(() => run([4, 6], { vol: 0.06, gap: 0.09, dur: 0.5 })),
+      bonus: () => play(() => tone(SCALE[6], 0.5, { vol: 0.065, bell: true })),
       // "Held breath": a warm, softly trembling chord (G and D) that swells in while the card turns.
       tense: () => {
         play(() => {
@@ -800,7 +800,7 @@
         // Flipping while holding 5 or 6 numbers: slow it down and let the heart pound.
         const tense = !ev.deal && numsOf(s.players[ev.p]) >= 5;
         showReveal(ev.card, tense);
-        if (tense) sfx.tense(); else sfx.flip();
+        if (tense) sfx.tense(); // otherwise the card's one soft tone plays as it lands
         await sleep(ev.deal ? 360 : tense ? 1150 : 440);
         break;
       }
@@ -1081,48 +1081,116 @@
     }, `picker ${a.action}`);
   }
 
-  // The winner's brag card: a square picture of the final scores with the game's link, sent
-  // through the phone's share sheet (or saved, where sharing pictures isn't supported).
-  function winCard(s) {
-    const W = 1080;
+  // The winner's brag card: a tall picture (fits phone screens and group chats) with a glowing
+  // gradient, confetti, a fan of game cards, the winner's name, and a medal scoreboard.
+  async function winCard(s) {
+    // Taller for 3 or 4 players, so the scoreboard never runs into the footer.
+    const W = 1080, H = 1350 + Math.max(0, s.players.length - 2) * 80;
     const c = document.createElement('canvas');
-    c.width = W; c.height = W;
+    c.width = W; c.height = H;
     const g = c.getContext('2d');
     const font = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
-    const bg = g.createLinearGradient(0, 0, W, W);
-    bg.addColorStop(0, '#ff6b1a'); bg.addColorStop(0.55, '#ff3d81'); bg.addColorStop(1, '#6a5cf0');
-    g.fillStyle = bg; g.fillRect(0, 0, W, W);
-    g.fillStyle = 'rgba(255,255,255,.96)';
-    const card = (x, y, w, h, r) => { if (!g.roundRect) { g.fillRect(x, y, w, h); return; } g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
-    card(70, 70, W - 140, W - 140, 56);
-    g.textAlign = 'center';
-    g.fillStyle = '#1b2a3a';
-    g.font = `800 54px ${font}`;
-    g.fillText('Streak or Bust', W / 2, 175);
-    g.font = '120px serif';
-    g.fillText('🏆', W / 2, 330);
+    let seed = 7 + s.round * 31 + s.players.reduce((n, pl) => n + pl.total, 0);
+    const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const rr = (x, y, w, h, r) => { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); };
     const win = s.players[s.winner];
-    g.fillStyle = pc(s.winner);
-    g.font = `900 92px ${font}`;
-    g.fillText(`${win.name} wins!`, W / 2, 455, W - 220);
-    const rows = s.players.map((pl, i) => ({ pl, i })).sort((a, b) => b.pl.total - a.pl.total);
-    let y = 560 + (4 - rows.length) * 52; // keep the rows centered for 2, 3, or 4 players
-    rows.forEach(({ pl, i }) => {
-      g.fillStyle = i === s.winner ? '#fff4d6' : '#f1f5f9';
-      card(170, y - 58, W - 340, 84, 24);
-      g.textAlign = 'left';
-      g.fillStyle = pc(i);
-      g.font = `800 46px ${font}`;
-      g.fillText(pl.name, 210, y, 520);
-      g.textAlign = 'right';
-      g.fillStyle = '#1b2a3a';
-      g.fillText(String(pl.total), W - 210, y);
-      y += 104;
-    });
+
+    // Background: deep purple into pink into orange, with a warm glow behind the cards.
+    const bg = g.createLinearGradient(0, 0, W * 0.6, H);
+    bg.addColorStop(0, '#2a0f5c'); bg.addColorStop(0.45, '#8b1fa8'); bg.addColorStop(0.78, '#ff3d81'); bg.addColorStop(1, '#ff8a3d');
+    g.fillStyle = bg; g.fillRect(0, 0, W, H);
+    const glow = g.createRadialGradient(W / 2, 470, 20, W / 2, 470, 520);
+    glow.addColorStop(0, 'rgba(255, 214, 90, .55)'); glow.addColorStop(0.5, 'rgba(255, 140, 90, .18)'); glow.addColorStop(1, 'rgba(255, 140, 90, 0)');
+    g.fillStyle = glow; g.fillRect(0, 0, W, H);
+    // Soft light spots.
+    for (let k = 0; k < 16; k++) {
+      const x = rnd() * W, y = rnd() * H, r = 30 + rnd() * 110;
+      const spot = g.createRadialGradient(x, y, 0, x, y, r);
+      spot.addColorStop(0, `rgba(255,255,255,${0.05 + rnd() * 0.08})`); spot.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = spot; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    // Confetti.
+    const conf = ['#ffd23f', '#3ddcff', '#a3e635', '#ff6b1a', '#ffffff', '#c084fc', '#ff8fb8'];
+    for (let k = 0; k < 70; k++) {
+      const x = rnd() * W, y = rnd() * 700, a = rnd() * Math.PI;
+      g.save(); g.translate(x, y); g.rotate(a); g.globalAlpha = 0.55 + rnd() * 0.45;
+      g.fillStyle = conf[k % conf.length];
+      if (k % 3) g.fillRect(-9, -4, 18, 8); else { g.beginPath(); g.arc(0, 0, 6, 0, Math.PI * 2); g.fill(); }
+      g.restore();
+    }
+
+    // Logo and name.
+    try {
+      const icon = await new Promise((res, rej) => { const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = 'icons/icon-192.png'; });
+      g.save(); rr(W / 2 - 52, 62, 104, 104, 26); g.clip(); g.drawImage(icon, W / 2 - 52, 62, 104, 104); g.restore();
+    } catch (e) { /* no logo */ }
     g.textAlign = 'center';
-    g.fillStyle = '#5b6b7b';
-    g.font = `700 40px ${font}`;
-    g.fillText('Play free at streakorbust.com', W / 2, W - 120);
+    g.fillStyle = '#fff';
+    g.font = `800 40px ${font}`;
+    if ('letterSpacing' in g) g.letterSpacing = '6px';
+    g.fillText('STREAK OR BUST', W / 2, 222);
+    if ('letterSpacing' in g) g.letterSpacing = '0px';
+
+    // A fan of three game cards.
+    const fan = [[7, -16, -150], [12, 0, 0], [3, 16, 150]];
+    fan.forEach(([v, deg, dx]) => {
+      g.save();
+      g.translate(W / 2 + dx, 470 + Math.abs(dx) * 0.18);
+      g.rotate((deg * Math.PI) / 180);
+      g.shadowColor = 'rgba(30, 0, 60, .45)'; g.shadowBlur = 40; g.shadowOffsetY = 18;
+      g.fillStyle = '#fff'; rr(-95, -135, 190, 270, 26); g.fill();
+      g.shadowColor = 'transparent';
+      g.strokeStyle = NUM_COLORS[v]; g.lineWidth = 6; rr(-80, -120, 160, 240, 18); g.stroke();
+      g.fillStyle = NUM_COLORS[v]; g.font = `900 ${v >= 10 ? 112 : 130}px ${font}`; g.textBaseline = 'middle';
+      g.fillText(String(v), 0, 8);
+      g.restore();
+    });
+    g.textBaseline = 'alphabetic';
+
+    // WINNER badge, the name, and the score.
+    const badge = g.createLinearGradient(W / 2 - 120, 0, W / 2 + 120, 0);
+    badge.addColorStop(0, '#ffe27a'); badge.addColorStop(1, '#ffb020');
+    g.shadowColor = 'rgba(0,0,0,.25)'; g.shadowBlur = 20; g.shadowOffsetY = 6;
+    g.fillStyle = badge; rr(W / 2 - 130, 660, 260, 64, 32); g.fill();
+    g.shadowColor = 'transparent';
+    g.fillStyle = '#4a2400'; g.font = `900 34px ${font}`;
+    if ('letterSpacing' in g) g.letterSpacing = '5px';
+    g.fillText('🏆 WINNER', W / 2, 704);
+    if ('letterSpacing' in g) g.letterSpacing = '0px';
+    g.shadowColor = 'rgba(40, 0, 60, .5)'; g.shadowBlur = 24; g.shadowOffsetY = 8;
+    g.fillStyle = '#fff'; g.font = `900 ${win.name.length > 10 ? 96 : 120}px ${font}`;
+    g.fillText(win.name, W / 2, 840, W - 140);
+    g.shadowColor = 'transparent';
+    g.fillStyle = '#ffd23f'; g.font = `800 54px ${font}`;
+    g.fillText(`${win.total} points`, W / 2, 912);
+
+    // Scoreboard on frosted glass.
+    const rows = s.players.map((pl, i) => ({ pl, i })).sort((a, b) => b.pl.total - a.pl.total);
+    const rowH = 76, top = 960, boxH = rows.length * rowH + 28;
+    g.fillStyle = 'rgba(255,255,255,.14)'; rr(150, top, W - 300, boxH, 30); g.fill();
+    g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 2; rr(150, top, W - 300, boxH, 30); g.stroke();
+    const medals = ['🥇', '🥈', '🥉', '🎖️'];
+    rows.forEach(({ pl, i }, k) => {
+      const y = top + 14 + k * rowH;
+      if (i === s.winner) { g.fillStyle = 'rgba(255, 210, 63, .22)'; rr(164, y, W - 328, rowH - 8, 20); g.fill(); }
+      const mid = y + (rowH - 8) / 2 + 13;
+      g.textAlign = 'left'; g.font = `40px ${font}`; g.fillStyle = '#fff';
+      g.fillText(medals[k] || '', 190, mid);
+      g.font = `800 40px ${font}`; g.fillText(pl.name, 260, mid, 520);
+      g.textAlign = 'right'; g.font = `900 42px ${font}`;
+      g.fillText(String(pl.total), W - 190, mid);
+    });
+
+    // Footer: a challenge and the link.
+    g.textAlign = 'center';
+    g.fillStyle = '#fff'; g.font = `800 44px ${font}`;
+    g.fillText(mode === 'local' ? 'Think you can beat that?' : 'Think you can beat me?', W / 2, H - 120);
+    g.font = `700 32px ${font}`;
+    const link = 'Play free at streakorbust.com';
+    const lw = g.measureText(link).width + 64;
+    g.fillStyle = '#fff'; rr(W / 2 - lw / 2, H - 92, lw, 58, 29); g.fill();
+    g.fillStyle = '#7a1fa2'; g.fillText(link, W / 2, H - 52);
+
     return new Promise((res) => c.toBlob(res, 'image/png'));
   }
   async function shareWin(s) {
@@ -1191,8 +1259,9 @@
     let achHTML = '';
     if (over) {
       const rowsA = s.players.map((p, i) => ({ p, i, list: x.ach[i] || [] })).filter((r) => r.list.length);
-      if (rowsA.length) achHTML = `<h3 style="margin:4px 0 8px">Badges earned</h3><div class="achlist">${rowsA.map((r) =>
-        `<div class="achrow" style="--pc:${pc(r.i)}"><span class="an">${esc(r.p.name)}</span><div class="achchips">${r.list.map((id) => `<span class="achchip">${ACH[id][0]} ${ACH[id][1]}</span>`).join('')}</div></div>`).join('')}</div>`;
+      // One flowing row of chips, each with the player's name, so the final screen stays short.
+      if (rowsA.length) achHTML = `<h3 style="margin:4px 0 8px">Badges earned</h3><div class="achflow">${rowsA.map((r) =>
+        r.list.map((id) => `<span class="achchip" style="--pc:${pc(r.i)}"><b>${esc(r.p.name)}</b> ${ACH[id][0]} ${ACH[id][1]}</span>`).join('')).join('')}</div>`;
     }
 
     const head = over
@@ -1207,8 +1276,10 @@
     else btns = `<button class="btn primary big" disabled>Waiting for a rematch…</button><button class="btn ghost" id="mLeave">Leave room</button>`;
     // Only the winner gets to brag: on a shared phone that's whoever won, online it's the winner's own phone.
     const canBrag = over && (mode === 'local' || s.winner === mySeat);
-    if (canBrag) btns = `<button class="btn share-win" id="mShareWin">🏆 Share ${mode === 'local' ? `${esc(s.players[s.winner].name)}'s` : 'your'} win</button>` + btns;
-    openModal(`${head}${momentHTML}<div class="sumrows">${rowsHTML}</div>${achHTML}<div class="mbtns">${btns}</div>`, (m) => {
+    if (canBrag) btns = '<button class="btn share-win" id="mShareWin">🏆 Share your win</button>' + btns;
+    // The final screen fits on one phone screen: no "moment of the round", no per-round math.
+    openModal(over ? `${head}<div class="sumrows final">${rowsHTML}</div>${achHTML}<div class="mbtns">${btns}</div>`
+      : `${head}${momentHTML}<div class="sumrows">${rowsHTML}</div>${achHTML}<div class="mbtns">${btns}</div>`, (m) => {
       requestAnimationFrame(() => m.querySelectorAll('.bar i').forEach((i) => { i.style.width = i.dataset.w + '%'; }));
       countUp(m.querySelectorAll('.st'));
       if (over) { fx.burst(260, 0.3); setTimeout(() => fx.burst(180, 0.35), 700); sfx.win(); }
@@ -1222,7 +1293,7 @@
       if (lv) lv.addEventListener('click', () => leaveRoom());
       const nw = m.querySelector('#mNew');
       if (nw) nw.addEventListener('click', () => { clearUndo(); closeModal(); store.del(SAVE); game = null; showSetup(); });
-    }, s.players.length >= 4 ? 'results many' : 'results');
+    }, (s.players.length >= 4 ? 'results many' : 'results') + (over ? ' final' : ''));
   }
 
   function countUp(els) {

@@ -839,3 +839,44 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 /* ---------- winner's share button ---------- */
 .btn.share-win { background: linear-gradient(135deg, #ffb020, #ff6b1a 55%, #ff3d81); color: #fff; font-weight: 800; box-shadow: 0 8px 22px rgba(255, 107, 26, .35); }
+
+/* ---------- final results: everything on one screen ---------- */
+#modal.results.final { min-height: 0; padding-top: 16px; }
+#modal.results.final .winner { padding: 2px 0 0; }
+#modal.results.final .winner h2 { font-size: 26px !important; }
+#modal.results.final .winner p { margin: 2px 0 0; font-size: 14px; }
+#modal.results.final .sumrows { flex: 0 0 auto; gap: 6px; margin: 10px 0 10px; }
+#modal.results.final .sumrow { padding: 9px 14px 9px 22px; border-radius: 14px; }
+#modal.results.final .sumrow::before { top: 10px; bottom: 10px; }
+#modal.results.final .sumrow .sb { display: none; }
+#modal.results.final .sumrow .sn { font-size: 17px; }
+#modal.results.final .sumrow .st { font-size: 28px; grid-row: auto; }
+#modal.results.final .sumrow .bar { margin-top: 6px; height: 5px; }
+#modal.results.final h3 { font-size: 14px; margin: 0 0 6px !important; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+#modal.results.final .achlist { gap: 4px; margin: 0 0 12px; }
+#modal.results.final .achrow { flex-direction: row; align-items: center; gap: 8px; font-size: 13px; }
+#modal.results.final .achrow .an { min-width: 0; flex: none; }
+#modal.results.final .achchips { flex-wrap: nowrap; overflow: hidden; gap: 4px; }
+#modal.results.final .achchip { padding: 3px 8px; font-size: 12px; white-space: nowrap; }
+#modal.results.final .mbtns { gap: 8px; }
+#modal.results.final #mShareWin { min-height: 50px; font-size: 17px; border-radius: 16px; }
+#modal.results.final #mRematch { min-height: 56px; font-size: 19px; }
+#modal.results.final #mNew, #modal.results.final #mLeave { min-height: 44px; font-size: 16px; }
+#modal.results.final .sumrow { grid-template-columns: 1fr auto; align-items: center; padding: 7px 14px 8px 22px; }
+#modal.results.final .sumrow .gain { display: none; }
+#modal.results.final .sumrow .st { font-size: 26px; line-height: 1.1; }
+#modal.results.final .sumrow .bar { margin-top: 4px; height: 4px; }
+.achflow { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 12px; }
+.achflow .achchip b { color: var(--pc); font-weight: 700; }
+#modal.results.final { padding: 12px 18px calc(var(--safe-b) + 12px); }
+#modal.results.final .winner small { font-size: 10px; }
+#modal.results.final .winner h2 { margin-top: 2px !important; }
+#modal.results.final .sumrows { gap: 5px; margin: 8px 0 8px; }
+#modal.results.final .sumrow { padding: 6px 14px 7px 22px; }
+#modal.results.final .sumrow .st { font-size: 24px; }
+#modal.results.final h3 { margin: 0 0 5px !important; }
+#modal.results.final .achflow { margin-bottom: 10px; }
+#modal.results.final .mbtns { gap: 6px; }
+#modal.results.final #mShareWin { min-height: 46px; }
+#modal.results.final #mRematch { min-height: 52px; }
+#modal.results.final #mNew, #modal.results.final #mLeave { min-height: 38px; font-size: 15px; border: 0; background: none; box-shadow: none; }
