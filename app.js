@@ -1525,7 +1525,7 @@
   async function shareApp() {
     const url = SITE_URL;
     try {
-      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text: 'Come play Streak or Bust with me! A fast push-your-luck card game.', url }); return; }
+      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text: 'Come play Streak or Bust with me! A fast-paced push-your-luck card game.', url }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(url); toast('Link copied. Paste it to your friends!'); } catch (e) { toast(`Share this link: <b>${esc(url.replace('https://', ''))}</b>`, 3500); }
   }
@@ -1534,7 +1534,7 @@
   async function invite() {
     const url = roomLink();
     try {
-      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text: `Join my Streak or Bust game. Room code: ${Net.code}`, url }); return; }
+      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text: `Join my Streak or Bust game, a fast-paced push-your-luck card game! Room code: ${Net.code}`, url }); return; }
     } catch (e) { if (e && e.name === 'AbortError') return; }
     try { await navigator.clipboard.writeText(url); toast('Invite link copied'); } catch (e) { toast(`Room code: <b>${esc(Net.code)}</b>`, 3000); }
   }
