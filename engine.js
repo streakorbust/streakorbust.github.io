@@ -321,6 +321,32 @@
       this.run();
     }
 
+    // Online: a player chose to leave. They're out at once, with no more turns and no bot: their hand
+    // goes to the discard pile (so their total stays frozen), and anything they were in the middle
+    // of is wrapped up without them. They come back in from the next round if they return.
+    leave(p) {
+      const s = this.s;
+      const pl = s.players[p];
+      if (!pl) return;
+      pl.out = true;
+      if (s.phase !== 'play' || pl.status === 'sitout') return;
+      s.discard.push(...pl.cards, ...pl.shields);
+      if (pl.bust) s.discard.push(pl.bust);
+      pl.cards = []; pl.shields = []; pl.bust = null;
+      pl.status = 'sitout';
+      this.emit('leave', { p });
+      const a = s.awaiting;
+      if (a && a.p === p) {
+        s.awaiting = null;
+        if (a.type === 'target') s.discard.push(a.card); // their action card goes unused
+        else s.tasks = [{ t: 'turn' }];
+        this.run();
+      } else if (a && a.type === 'target') {
+        a.options = a.options.filter((i) => i !== p); // can't Chill or Hat Trick someone who left
+        if (!a.options.length) { s.awaiting = null; s.discard.push(a.card); this.run(); }
+      }
+    }
+
     // ---------- scoring ----------
 
     endRound() {

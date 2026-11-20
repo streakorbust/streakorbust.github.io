@@ -716,6 +716,10 @@
         toast(`${nm(ev.p)} skips this turn`);
         await sleep(400);
         break;
+      case 'leave':
+        render(s, focusP);
+        await sleep(300);
+        break;
       case 'roundEnd':
         hideReveal(false);
         render(s, focusP);
@@ -1265,7 +1269,7 @@
   let botHoldUntil = 0;
   function botRuns(seat, a) {
     const m = members[seat];
-    if (!m || m.cid === myCid || Date.now() < botHoldUntil) return false;
+    if (!m || m.left || m.cid === myCid || Date.now() < botHoldUntil) return false; // left on purpose: never a bot
     if (!m.on) return !!m.awaySince && Date.now() - m.awaySince >= BOT_AFTER_MS;
     return !!m.rejoin && a.type !== 'decide';
   }
@@ -1520,10 +1524,14 @@
     const i = members.indexOf(m);
     m.on = false;
     m.left = true;
-    m.awaySince = Date.now() - SIT_OUT_MS; // past the bot and sit-out limits: they're out now
+    m.awaySince = Date.now() - SIT_OUT_MS; // past every limit: no countdown, no bot
     m.totalAtDrop = game.s.players[i] ? game.s.players[i].total : 0;
+    if (game.s.awaiting && game.s.awaiting.p === i && game.s.awaiting.type === 'decide') hostUndo = null;
+    game.leave(i); // out right away: no bot ever plays for someone who chose to leave
+    broadcastEvents();
+    saveHosted();
     presenceChanged();
-    hostWatch();
+    pump();
     const note = `<b>${esc(m.name)}</b> left the game. They can come back any time with the room code.`;
     toast(note, 3200);
     members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });

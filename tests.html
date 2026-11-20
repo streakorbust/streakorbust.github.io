@@ -275,6 +275,51 @@ test('sitting-out players get no cards and no turns', () => {
   eq(st(g, 1), 'active', 'back in next round');
 });
 
+test('leaving on your own turn: hand discarded, no more turns, play moves on', () => {
+  const g = game(['A', 'B', 'C'], [N(5), N(3), N(2)]);
+  eq(g.s.awaiting.p, 0);
+  g.leave(0);
+  eq(st(g, 0), 'sitout');
+  eq(g.s.players[0].cards.length, 0);
+  eq(g.s.players[0].out, true);
+  eq(g.s.awaiting.p, 1, 'next player is up');
+  g.stay(); g.stay();
+  eq(g.s.phase, 'summary');
+  eq(g.s.summary.rows[0].score, 0, 'score frozen');
+});
+
+test('leaving while choosing who gets an action card: card goes unused', () => {
+  const g = game(['A', 'B', 'C'], [N(5), N(3), N(2), A('lock')]);
+  g.hit();
+  eq(g.s.awaiting.type, 'target');
+  const before = g.s.discard.length;
+  g.leave(0);
+  eq(g.s.awaiting.type, 'decide');
+  eq(g.s.awaiting.p, 1);
+  eq(g.s.discard.length, before + 2, 'lock and the 5 are discarded');
+});
+
+test('someone who left cannot be chosen for an action card', () => {
+  const g = game(['A', 'B', 'C'], [N(5), N(3), N(2), A('lock')]);
+  g.hit();
+  eq(g.s.awaiting.options, [0, 1, 2]);
+  g.leave(2);
+  eq(g.s.awaiting.options, [0, 1]);
+  g.chooseTarget(1);
+  eq(st(g, 1), 'locked');
+});
+
+test('leaving when not on turn; round still finishes normally', () => {
+  const g = game(['A', 'B'], [N(5), N(3)]);
+  g.leave(1);
+  eq(g.s.awaiting.p, 0);
+  g.stay();
+  eq(g.s.phase, 'summary');
+  eq(g.s.players.map((p) => p.total), [5, 0]);
+  g.nextRound();
+  eq(st(g, 1), 'sitout', 'stays out until they come back');
+});
+
 test('random full games never crash', () => {
   for (let n = 0; n < 2000; n++) {
     const names = Array.from({ length: 2 + (n % 7) }, (_, i) => 'P' + i);
