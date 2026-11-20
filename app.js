@@ -1010,7 +1010,9 @@
       <li><b>Lost your connection?</b> Everyone waits 30 seconds for you. After that, a bot plays your turns so the game keeps moving.</li>
       <li><b>Gone a full minute?</b> The bot stops, and you sit out with your score frozen.</li>
       <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
-      <li>The host's phone runs the game. If the host drops, everyone waits, and after 30 seconds you can choose to leave.</li></ul>
+      <li><b>Host dropped?</b> They get the same 30 seconds. Then the next player's phone takes over, and the game keeps going.</li>
+      <li><b>Tapped Leave?</b> You're out right away, with no bot. Come back any time with the room code.</li>
+      <li>It takes at least 2 players. If everyone else is out, the game pauses until someone's back.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
@@ -1167,6 +1169,12 @@
   let members = []; // host: [{ cid, name, peer, on }] in seat order
   let lobbyTarget = 200; // host: chosen target score
   let lobbyData = null; // guest: last lobby update from the host
+  let hostSeat = 0; // which seat's phone is running the game (changes after a host handoff)
+  let seatList = []; // guest: player ids in seat order, so this phone can take over if the host drops
+  let takingOver = false; // guest: trying to take over the room right now
+  let nextTakeover = 0; // guest: don't try again before this time
+  let quietUntil = 0; // new host: friends switching over aren't announced as "joined"
+  let soloShown = false; // host: the "waiting for players" pause is up
   let hostUndo = null; // host: { seat, snap } right after someone closes, until the next move
   let netEpoch = 0; // bumps on every create/join so a delayed leave() can't hit a newer room
   const sentEvs = new WeakSet();
@@ -1216,14 +1224,14 @@
   function hostApply(seat, a, i) {
     if (!game || seat < 0) return;
     const s = game.s, aw = s.awaiting;
-    if (!aw) return;
+    if (!aw || soloShown) return; // paused: waiting for players
     if (a === 'undo') {
       if (!hostUndo || hostUndo.seat !== seat || aw.type !== 'decide') return; // a finished round can't be undone
       game = Game.load(JSON.parse(hostUndo.snap));
       hostUndo = null;
       closeModal();
       lastTurnP = game.s.awaiting.p;
-      Net.broadcast({ t: 'sync', state: strip(game.s), seats: seatCids(), presence, undoBy: seat });
+      Net.broadcast({ t: 'sync', state: strip(game.s), seats: seatCids(), host: mySeat, presence, undoBy: seat });
       toast(`<b>${esc(game.s.players[seat].name)}</b> took back their close`);
       settle();
       return;
@@ -1251,7 +1259,7 @@
   const BOT_DELAY_MS = 900;
   const BOT_AFTER_MS = 30000;
   const SIT_OUT_MS = 60000;
-  const HOST_WAIT_MS = 30000; // guests can choose to leave once the host has been gone this long
+  const HOST_WAIT_MS = 90000; // if the game still can't be reached after this long, offer to leave
   let botTimer = null;
   let botKey = null;
   let graceTimer = null;
@@ -1338,7 +1346,7 @@
   let hostOffSince = null; // host: when this phone lost its own connection
   const clock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
   function hostLabel() {
-    const p0 = game ? game.s.players[0] : lobbyData && lobbyData.members[0];
+    const p0 = game ? game.s.players[hostSeat] : lobbyData && lobbyData.members[0];
     return p0 && p0.name ? `<b>${esc(p0.name)}</b>` : 'The host';
   }
   function showCountdown(p) {
@@ -1348,9 +1356,13 @@
   function connText() {
     const offline = navigator.onLine === false;
     if (mode === 'guest' && lostSince) {
-      const t = clock(Date.now() - lostSince);
-      return offline ? `You're offline. Reconnecting when your signal is back… <b>${t}</b>`
-        : `${hostLabel()} got disconnected. Waiting for them to rejoin… <b>${t}</b>`;
+      const ms = Date.now() - lostSince;
+      if (offline) return `You're offline. Reconnecting when your signal is back… <b>${clock(ms)}</b>`;
+      if (takingOver) return 'Moving the game to your phone…';
+      if (!game && !lobbyData) return `Reconnecting… <b>${clock(ms)}</b>`;
+      if (ms < BOT_AFTER_MS) return `${hostLabel()} (host) dropped out. Game moves on in <b>${clock(BOT_AFTER_MS - ms + 999)}</b>`;
+      const next = successorName();
+      return next ? `Moving the game to ${next}'s phone… <b>${clock(ms)}</b>` : `Reconnecting to the game… <b>${clock(ms)}</b>`;
     }
     if (mode === 'host' && hostOffSince && Date.now() - hostOffSince > 1500) {
       return `You lost your connection. Reconnecting… <b>${clock(Date.now() - hostOffSince)}</b>`;
@@ -1377,12 +1389,122 @@
     if (lb) lb.innerHTML = html;
   }
   function askKeepWaiting() {
-    openModal(`<h2>Still waiting</h2><p>${hostLabel()} has been disconnected for 30 seconds. When they're back, the game picks up right where it left off. You can keep waiting or leave the room.</p>
+    openModal(`<h2>Still connecting</h2><p>We can't reach the game right now. It picks up right where it left off as soon as we do. You can keep waiting or leave the room.</p>
       <div class="mbtns"><button class="btn pink" id="mWait">Keep waiting</button><button class="btn ghost" id="mLeaveRoom">Leave room</button></div>`, (m) => {
       m.querySelector('#mWait').onclick = backToTable;
       m.querySelector('#mLeaveRoom').onclick = () => leaveRoom();
     }, '', backToTable);
   }
+  // ---------- host handoff ----------
+  // The host's phone drops: after the same 30-second countdown anyone gets, the next phone in seat
+  // order takes over the room. The room's code is a lock only one phone can hold, so there's never
+  // two hosts. The new host rebuilds the hidden deck from cards nobody has seen (see
+  // Game.takeOver), a bot plays the old host's turns, and the old host rejoins as a player.
+  function successorOrder() {
+    if (game) {
+      const n = game.s.players.length;
+      const order = [];
+      for (let k = 1; k < n; k++) {
+        const i = (hostSeat + k) % n;
+        if (presence[i] !== false) order.push(i);
+      }
+      return order;
+    }
+    return lobbyData ? lobbyData.members.slice(1).map((m) => m.cid) : [];
+  }
+  function successorName() {
+    const first = successorOrder()[0];
+    if (first == null || first === mySeat || first === myCid) return null;
+    const name = game ? game.s.players[first] && game.s.players[first].name : (lobbyData.members.find((m) => m.cid === first) || {}).name;
+    return name ? `<b>${esc(name)}</b>` : null;
+  }
+  async function takeOver() {
+    takingOver = true;
+    paintConn();
+    const code = Net.code;
+    try {
+      await Net.host(code, { tries: 2 });
+    } catch (e) {
+      // Someone else got there first, or the old host is still holding the room: stay a guest.
+      takingOver = false;
+      nextTakeover = Date.now() + 20000;
+      if (mode === 'guest') Net.rejoin(code);
+      return;
+    }
+    takingOver = false;
+    if (mode !== 'guest') { Net.leave(); return; } // left the room meanwhile
+    becomeHost(code);
+  }
+  function becomeHost(code) {
+    const oldHost = hostSeat;
+    const droppedAt = lostSince || Date.now();
+    const oldName = game ? game.s.players[oldHost] && game.s.players[oldHost].name : lobbyData && lobbyData.members[0] && lobbyData.members[0].name;
+    mode = 'host';
+    clearPending();
+    clearUndo();
+    hostUndo = null;
+    showCountdown(null);
+    if (!$('#modalWrap').classList.contains('hidden') && $('#modal').querySelector('#mWait')) closeModal();
+    quietUntil = Date.now() + 20000;
+    store.del(ROOM);
+    alertsOn = false;
+    pushSubscribe(code).then((ok) => { alertsOn = ok; renderAlerts(); });
+    if (!game) {
+      // Still in the lobby: just keep the room open with this phone as host.
+      members = [{ cid: myCid, name: prefs.myName || 'Player', peer: null, on: true }];
+      mySeat = 0;
+      hostSeat = 0;
+      lobbyTarget = lobbyData ? lobbyData.target : 200;
+      lobbyData = null;
+      showLobby();
+      saveLobby();
+      toast(`${oldName ? `<b>${esc(oldName)}</b>` : 'The host'} left, so you're hosting this room now`, 3500);
+      return;
+    }
+    game = Game.takeOver(JSON.parse(JSON.stringify(game.s)));
+    game.s.x = game.s.x || { ach: {}, moments: [], maxDef: [] };
+    const now = Date.now();
+    members = seatList.map((cid, i) => {
+      const wasHere = presence[i] !== false && i !== oldHost;
+      return {
+        cid, name: game.s.players[i].name, peer: null, on: i === mySeat,
+        fresh: wasHere, // friends who were connected are just switching over: no "is back" notes
+        awaySince: i === mySeat ? null : i === oldHost ? droppedAt : !wasHere && goneAt[i] ? goneAt[i] : now,
+        totalAtDrop: game.s.players[i].total,
+      };
+    });
+    hostSeat = mySeat;
+    lobbyTarget = game.s.target;
+    presence = members.map((m) => m.on);
+    rejoining = [];
+    botHoldUntil = now + 8000; // give friends' phones a moment to switch over
+    setTimeout(hostWatch, 8100);
+    saveHosted();
+    toast(`<b>${esc(oldName || 'The host')}</b>'s connection dropped, so your phone is running the game now`, 4000);
+    lastTurnP = null;
+    if (!busy) settle();
+  }
+
+  // Fewer than 2 players still in (everyone else gone a minute or left): pause until someone's back.
+  const andList = (xs) => (xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')}, and ${xs[xs.length - 1]}`);
+  function soloCheck() {
+    if (game.s.phase === 'over') return;
+    const inGame = game.s.players.filter((pl) => !pl.out).length;
+    if (inGame >= 2) {
+      if (soloShown) { soloShown = false; if ($('#modal').querySelector('#mSoloEnd')) closeModal(); if (!busy) settle(); toast('Back to the game!', 1800); }
+      return;
+    }
+    if (soloShown && $('#modal').querySelector('#mSoloEnd')) return; // already showing
+    if (busy || !$('#table').classList.contains('active')) return;
+    soloShown = true;
+    const gone = game.s.players.filter((pl, i) => i !== mySeat && pl.out).map((pl) => `<b>${esc(pl.name)}</b>`);
+    openModal(`<h2>Waiting for players</h2><p>${andList(gone)} ${gone.length > 1 ? 'are' : 'is'} out of the game, and you need at least 2 players. The game is paused until someone's back. They can rejoin with room code <b>${esc(Net.code || '')}</b>.</p>
+      <div class="mbtns"><button class="btn primary" id="mSoloInvite">Invite friends</button><button class="btn ghost" id="mSoloEnd" style="color:var(--bad)">End the game</button></div>`, (m) => {
+      m.querySelector('#mSoloInvite').onclick = invite;
+      m.querySelector('#mSoloEnd').onclick = () => { soloShown = false; leaveRoom(); };
+    }, '', null);
+  }
+
   // Host's phone came back online: friends' phones reconnect on their own within a few seconds,
   // so don't start the bot for them, and restart their away clocks from now.
   function hostBack() {
@@ -1397,10 +1519,19 @@
       if (off && !hostOffSince) hostOffSince = Date.now();
       else if (!off && hostOffSince) { const was = Date.now() - hostOffSince; hostOffSince = null; if (was > 1500) hostBack(); }
     } else hostOffSince = null;
+    if (mode === 'guest' && lostSince && !takingOver && navigator.onLine !== false && (game || lobbyData)) {
+      // The host has been gone 30 seconds: the next phone in line takes over the game. Phones
+      // further down the line wait a little longer, in case the first one is gone too.
+      const order = successorOrder();
+      let rank = order.indexOf(game ? mySeat : myCid);
+      if (rank < 0) rank = order.length;
+      if (Date.now() >= Math.max(lostSince + BOT_AFTER_MS + rank * 8000, nextTakeover)) takeOver();
+    }
     if (mode === 'guest' && lostSince && !lostAsked && Date.now() - lostSince > HOST_WAIT_MS && $('#modalWrap').classList.contains('hidden')) {
       lostAsked = true;
       askKeepWaiting();
     }
+    if (mode === 'host' && game) soloCheck();
     paintConn();
     // A dropped player's AWAY tag turns into BOT once their 30 seconds are up.
     if (game && mode !== 'local') {
@@ -1435,20 +1566,21 @@
     });
     if (changed) {
       saveHosted();
-      Net.broadcast({ t: 'sync', state: strip(s), seats: seatCids(), presence, rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList() });
+      Net.broadcast({ t: 'sync', state: strip(s), seats: seatCids(), host: mySeat, presence, rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList() });
       if (!busy && $('#table').classList.contains('active')) render(s, focusP);
     }
   }, 5000);
 
+  const hostedByMe = (h) => !!h && (h.host ? h.host === myCid : !!(h.members && h.members[0] && h.members[0].cid === myCid));
   function saveHosted() {
     if (mode !== 'host' || !game) return;
-    store.set(HOSTED, { code: Net.code, members: members.map(({ cid, name }) => ({ cid, name })), target: game.s.target, state: game.s, when: Date.now() });
+    store.set(HOSTED, { code: Net.code, host: myCid, members: members.map(({ cid, name }) => ({ cid, name })), target: game.s.target, state: game.s, when: Date.now() });
   }
 
   function presenceChanged() {
     presence = members.map((m) => m.cid === myCid || m.on);
     rejoining = members.map((m) => !!(m.on && m.rejoin));
-    Net.broadcast({ t: 'presence', on: presence, rejoin: rejoining, gone: goneList() });
+    Net.broadcast({ t: 'presence', on: presence, rejoin: rejoining, gone: goneList(), host: mySeat });
     if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
   }
 
@@ -1460,7 +1592,7 @@
   // Waiting in the lobby counts too: if the phone closes the page, the room can be reopened.
   function saveLobby() {
     if (mode !== 'host' || game || !Net.code) return;
-    store.set(HOSTED, { code: Net.code, members: [{ cid: myCid, name: members[0] ? members[0].name : prefs.myName }], target: lobbyTarget, state: null, lobby: true, when: Date.now() });
+    store.set(HOSTED, { code: Net.code, host: myCid, members: [{ cid: myCid, name: members[0] ? members[0].name : prefs.myName }], target: lobbyTarget, state: null, lobby: true, when: Date.now() });
   }
 
   function hostMsg(d, peerId) {
@@ -1485,7 +1617,7 @@
         }
         // Tell the returning player what happened while they were gone, and let everyone else know.
         const back = wasOff && !fresh ? { gained: seatP && m.totalAtDrop != null ? seatP.total - m.totalAtDrop : 0 } : null;
-        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList(), back });
+        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), host: mySeat, presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList(), back });
         presenceChanged();
         if (back) {
           const note = `<b>${esc(m.name)}</b> is back and plays on their next turn`;
@@ -1499,7 +1631,7 @@
         if (members.length >= MAX_PLAYERS) { Net.sendTo(peerId, { t: 'refuse', why: 'full' }); Net.kick(peerId); return; }
         m = { cid, name, peer: peerId, on: true };
         members.push(m);
-        joinAlert(name);
+        if (Date.now() > quietUntil) joinAlert(name);
       } else { m.peer = peerId; m.on = true; m.name = name; }
       lobbyChanged();
       return;
@@ -1557,11 +1689,12 @@
     clearUndo();
     hostUndo = null;
     mySeat = members.findIndex((m) => m.cid === myCid);
+    hostSeat = mySeat;
     const names = members.map((m) => m.name);
     game = new Game(names, { target: lobbyTarget, dealer: names.length - 1 });
     game.s.x = { ach: {}, moments: [], maxDef: [] };
     presence = members.map((m) => m.cid === myCid || m.on);
-    Net.broadcast({ t: 'start', state: strip(game.s), seats: seatCids(), presence });
+    Net.broadcast({ t: 'start', state: strip(game.s), seats: seatCids(), host: mySeat, presence });
     closeModal();
     lastTurnP = null;
     showScreen('table');
@@ -1587,6 +1720,8 @@
         clearPending();
         clearUndo();
         mySeat = d.seats.indexOf(myCid);
+        seatList = d.seats.slice();
+        hostSeat = d.host != null ? d.host : 0;
         presence = d.presence || [];
         guestX = null;
         game = Game.load(d.state);
@@ -1601,6 +1736,9 @@
         clearPending();
         clearUndo();
         mySeat = d.seats.indexOf(myCid);
+        seatList = d.seats.slice();
+        if (d.host != null && d.host !== hostSeat && game) toast(`<b>${esc(game.s.players[d.host] ? game.s.players[d.host].name : 'A friend')}</b>'s phone is running the game now`, 3500);
+        if (d.host != null) hostSeat = d.host;
         presence = d.presence || presence;
         if (d.gone) setGone(d.gone);
         game = Game.load(d.state);
@@ -1637,6 +1775,7 @@
         presence = d.on || [];
         rejoining = d.rejoin || [];
         setGone(d.gone || []);
+        if (d.host != null) hostSeat = d.host;
         if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
         break;
       case 'refuse':
@@ -1825,7 +1964,14 @@
       if (epoch !== netEpoch) return;
       mode = 'local';
       setNetBusy(false);
-      toast(reopen && e.type === 'unavailable-id' ? 'That room is still closing. Try again in a moment.' : netError(e), 3200);
+      if (reopen && e.type === 'unavailable-id') {
+        // A friend's phone took over while this one was away: join as a player instead.
+        store.del(HOSTED);
+        toast("A friend's phone is running this game now. Joining as a player…", 3200);
+        joinRoom(reopen.code);
+        return;
+      }
+      toast(netError(e), 3200);
       return;
     }
     if (epoch !== netEpoch) return;
@@ -1846,6 +1992,7 @@
       botHoldUntil = Date.now() + 15000; // friends' phones reconnect on their own; don't play for them yet
       setTimeout(hostWatch, 15100);
       mySeat = members.findIndex((m) => m.cid === myCid);
+      hostSeat = mySeat;
       lobbyTarget = reopen.target;
       presence = members.map((m) => m.cid === myCid);
       game = Game.load(reopen.state);
@@ -1941,6 +2088,7 @@
     clearUndo();
     waitNote('');
     clearTimeout(botTimer); botKey = null; rejoining = [];
+    hostSeat = 0; seatList = []; takingOver = false; nextTakeover = 0; soloShown = false;
     showCountdown(null);
     closeModal();
     showSetup();
@@ -1983,7 +2131,7 @@
   }
   function onlineGameSaved() {
     const hosted = store.get(HOSTED);
-    if (hosted && hosted.state && hosted.state.phase !== 'over' && hosted.members && hosted.members[0] && hosted.members[0].cid === myCid) return hosted.code;
+    if (hosted && hosted.state && hosted.state.phase !== 'over' && hostedByMe(hosted)) return hosted.code;
     const room = store.get(ROOM);
     if (room && Date.now() - room.when < 12 * 3600e3) return room.code;
     return null;
@@ -2022,7 +2170,7 @@
     const hosted = store.get(HOSTED);
     const room = store.get(ROOM);
     let html = '';
-    const hostOk = hosted && hosted.state && hosted.state.phase !== 'over' && hosted.members[0] && hosted.members[0].cid === myCid;
+    const hostOk = hosted && hosted.state && hosted.state.phase !== 'over' && hostedByMe(hosted);
     const lobbyOk = hosted && hosted.lobby && Date.now() - hosted.when < 2 * 3600e3;
     const roomOk = room && Date.now() - room.when < 12 * 3600e3;
     if (lobbyOk && !(roomOk && room.when > hosted.when)) {
@@ -2056,6 +2204,22 @@
       if (game && !busy) render(game.s, focusP);
     });
     Net.on('error', () => { if (mode === 'host') toast('Room connection hiccup. Reconnecting…', 2500); });
+    Net.on('deposed', () => {
+      if (mode !== 'host') return;
+      const code = Net.code;
+      store.del(HOSTED);
+      store.set(ROOM, { code, when: Date.now() });
+      mode = 'guest';
+      members = [];
+      hostUndo = null;
+      hostOffSince = null;
+      soloShown = false;
+      clearTimeout(botTimer); botKey = null; clearTimeout(graceTimer);
+      closeModal();
+      showCountdown(-1);
+      toast("While you were away, a friend's phone took over the game. Rejoining as a player…", 4000);
+      Net.rejoin(code);
+    });
 
     document.querySelectorAll('#modeSeg button').forEach((b) => b.addEventListener('click', () => setHomeMode(b.dataset.m)));
     $('#btnCreate').onclick = () => needOnlyOnline(() => createRoom(null));
@@ -2077,7 +2241,7 @@
     if (/[?&]reopen\b/.test(location.search)) {
       history.replaceState(null, '', location.pathname + (debug ? '?debug' : ''));
       const hosted = store.get(HOSTED);
-      if (hosted && hosted.members && hosted.members[0] && hosted.members[0].cid === myCid) { prefs.mode = 'online'; setTimeout(() => createRoom(hosted), 0); }
+      if (hosted && hostedByMe(hosted)) { prefs.mode = 'online'; setTimeout(() => createRoom(hosted), 0); }
     }
     // Opened from an invite link: fill in the code and point at the Join button.
     const m = /[?&]room=([A-Za-z]{4})\b/.exec(location.search);

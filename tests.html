@@ -320,6 +320,45 @@ test('leaving when not on turn; round still finishes normally', () => {
   eq(st(g, 1), 'sitout', 'stays out until they come back');
 });
 
+test('host handoff rebuilds the hidden deck from unseen cards only', () => {
+  for (let n = 0; n < 200; n++) {
+    const g = new Game(['A', 'B', 'C'], { target: 200 });
+    g.startRound();
+    // play a few random moves, sometimes into a second round
+    for (let k = 0; k < 25 && g.s.phase !== 'over'; k++) {
+      const a = g.s.awaiting;
+      if (!a) break;
+      if (a.type === 'decide') (Math.random() < 0.6 ? g.hit() : g.stay());
+      else if (a.type === 'target') g.chooseTarget(a.options[0]);
+      else if (g.s.phase === 'summary') g.nextRound();
+    }
+    // what a friend's phone holds: the deck is hidden (all zeros)
+    const guest = JSON.parse(JSON.stringify(g.s));
+    guest.deck = guest.deck.map(() => 0);
+    const h = Game.takeOver(guest);
+    eq(h.s.deck.length, g.s.deck.length, 'same number of cards left');
+    eq(h.s.deck.map((c) => c.id).sort((x, y) => x - y), g.s.deck.map((c) => c.id).sort((x, y) => x - y), 'exactly the unseen cards');
+  }
+});
+
+test('the game keeps going after a handoff', () => {
+  const g = new Game(['A', 'B'], { target: 200 });
+  g.startRound();
+  const guest = JSON.parse(JSON.stringify(g.s));
+  guest.deck = guest.deck.map(() => 0);
+  const h = Game.takeOver(guest);
+  for (let k = 0; k < 400 && h.s.phase !== 'over'; k++) {
+    const a = h.s.awaiting;
+    if (h.s.phase === 'summary') h.nextRound();
+    else if (a.type === 'decide') (Math.random() < 0.5 ? h.hit() : h.stay());
+    else if (a.type === 'target') h.chooseTarget(a.options[0]);
+  }
+  const ids = new Set();
+  const all = [...h.s.deck, ...h.s.discard, ...h.s.players.flatMap((p) => [...p.cards, ...p.shields, ...(p.bust ? [p.bust] : [])])];
+  all.forEach((c) => ids.add(c.id));
+  eq(ids.size, all.length, 'no card is duplicated');
+});
+
 test('random full games never crash', () => {
   for (let n = 0; n < 2000; n++) {
     const names = Array.from({ length: 2 + (n % 7) }, (_, i) => 'P' + i);

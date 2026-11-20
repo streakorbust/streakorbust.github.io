@@ -79,6 +79,21 @@
       return g;
     }
 
+    // Host handoff: a friend's phone takes over the game. That phone only ever saw the face-up cards
+    // and the discard pile, never the order of the face-down deck. So it rebuilds the deck from every
+    // card nobody has seen and shuffles it fresh: just as random as before, and nobody peeks.
+    static takeOver(state, rng = Math.random) {
+      const seen = new Set();
+      const see = (c) => { if (c && c.id != null) seen.add(c.id); };
+      for (const p of state.players) { p.cards.forEach(see); (p.shields || []).forEach(see); see(p.bust); }
+      state.discard.forEach(see);
+      Object.values(state.setAside || {}).forEach((list) => list.forEach(see));
+      (state.tasks || []).forEach((t) => see(t.card));
+      if (state.awaiting) { see(state.awaiting.card); if (state.awaiting.task) see(state.awaiting.task.card); }
+      state.deck = shuffle(buildDeck().filter((c) => !seen.has(c.id)), rng);
+      return Game.load(state);
+    }
+
     emit(type, data = {}) {
       this.events.push(Object.assign({ type }, data, { snap: clone(this.s) }));
     }

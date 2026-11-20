@@ -75,9 +75,11 @@
   }
 
   // ---------- host ----------
-  // wanted: reopen a specific code (after the host's app restarted). The old id can stay
-  // reserved on the server for a little while, so keep trying for ~20s.
-  async function host(wanted) {
+  // wanted: reopen a specific code (after the host's app restarted, or a friend's phone taking
+  // over the game). The old id can stay reserved on the server for a little while, so keep trying.
+  // The room's id is the lock: only one phone can hold it, so there's never two hosts at once.
+  async function host(wanted, o = {}) {
+    const maxTries = o.tries != null ? o.tries : 10;
     await load();
     const opts = await peerOptions();
     left = false;
@@ -102,9 +104,11 @@
           if (p !== peer) return;
           if (!opened && e.type === 'unavailable-id') {
             if (!wanted && tries++ < 6) return attempt(newCode());
-            if (wanted && tries++ < 10) { p.destroy(); return setTimeout(() => { if (!left) attempt(c); }, 2000); }
+            if (wanted && tries++ < maxTries) { p.destroy(); return setTimeout(() => { if (!left) attempt(c); }, 2000); }
           }
           if (!opened) { reject(e); return; }
+          // Back online, but someone else now holds the room: a friend's phone took over the game.
+          if (e.type === 'unavailable-id') { emit('deposed'); return; }
           emit('error', e);
         });
       };
@@ -172,6 +176,23 @@
     retryTimer = setTimeout(() => { if (!hostConn && !left) connect(); }, ms);
   }
 
+  // Guest who must keep trying until the room answers (after a takeover attempt, or a host who
+  // came back to find a friend's phone running the game). Never gives up; 'open' fires on connect.
+  async function rejoin(wanted) {
+    await load();
+    const opts = await peerOptions();
+    left = false;
+    role = 'guest';
+    code = cleanCode(wanted);
+    reset();
+    everConnected = true; // so every failure just schedules another try
+    const p = opts ? new Peer(undefined, opts) : new Peer();
+    peer = p;
+    keepSignal(p);
+    p.on('open', () => connect());
+    p.on('error', () => { if (p === peer) scheduleRetry(); });
+  }
+
   const send = (msg) => { if (hostConn) { try { hostConn.send(msg); return true; } catch (e) { /* closing */ } } return false; };
 
   // ---------- shared ----------
@@ -185,13 +206,13 @@
   // Back from the background: reconnect right away instead of waiting for a timer.
   function wake() {
     if (left || !peer) return;
-    if (peer.destroyed) { if (role === 'host') host(code).catch(() => emit('error', { type: 'reopen' })); return; }
+    if (peer.destroyed) { if (role === 'host') host(code).catch((e) => emit(e && e.type === 'unavailable-id' ? 'deposed' : 'error', { type: 'reopen' })); return; }
     if (peer.disconnected) { try { peer.reconnect(); } catch (e) { /* ignore */ } }
     if (role === 'guest' && !hostConn) scheduleRetry(300);
   }
 
   global.Net = {
-    load, host, join, leave, wake, broadcast, sendTo, send, kick, cleanCode,
+    load, host, join, rejoin, leave, wake, broadcast, sendTo, send, kick, cleanCode,
     on(type, fn) { handlers[type] = fn; },
     get role() { return role; },
     get code() { return code; },
