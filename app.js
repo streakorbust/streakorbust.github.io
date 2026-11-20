@@ -703,7 +703,10 @@
     // A little run of notes from the scale, each ringing softly into the next.
     const run = (steps, o = {}) => steps.forEach((k, i) => tone(SCALE[k] * (o.oct || 1), o.dur || 0.6, { vol: o.vol || 0.08, at: i * (o.gap || 0.11), bell: true, attack: 0.02 }));
     return {
-      flip: () => play(() => air(0.14, { vol: 0.035, freq: 1600 })),
+      // "Rise into it": as the card turns, a soft note five steps below the landing note that's
+      // about to play, so the flip always leads up into it. n = the number the card will be
+      // in the hand (0 for bonus and action cards).
+      flip: (n) => play(() => tone((n ? SCALE[Math.min(n, 8) - 1] : SCALE[6]) * 2 / 3, 0.22, { vol: 0.05, attack: 0.03, dry: true })),
       // Each new number is the next note up the scale, so a growing hand climbs gently.
       place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.45, { vol: 0.1, dry: true })),
       bonus: () => play(() => tone(SCALE[6], 0.45, { vol: 0.075, dry: true })),
@@ -807,7 +810,8 @@
         // Flipping while holding 5 or 6 numbers: slow it down and let the heart pound.
         const tense = !ev.deal && numsOf(s.players[ev.p]) >= 5;
         showReveal(ev.card, tense);
-        if (tense) sfx.tense(); // otherwise the card's one soft tone plays as it lands
+        if (tense) sfx.tense();
+        else sfx.flip(ev.card.kind === 'num' ? numsOf(s.players[ev.p]) + 1 : 0);
         await sleep(ev.deal ? 360 : tense ? 1150 : 440);
         break;
       }
