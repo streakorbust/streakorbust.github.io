@@ -2129,11 +2129,12 @@
     const to = nextHostSeat();
     if (to == null) { leaveRoom(); return; }
     const name = members[to].name;
+    const inGame = !!game;
     Net.broadcast({ t: 'handoff', from: mySeat, toCid: members[to].cid });
     handingOff = true;
     leaveRoom();
     handingOff = false;
-    toast(`You left. The game keeps going on <b>${esc(name)}</b>'s phone.`, 3500);
+    toast(inGame ? `You left. The game keeps going on <b>${esc(name)}</b>'s phone.` : `You left. <b>${esc(name)}</b> is hosting the room now.`, 3500);
   }
   function askHostLeave(inLobby) {
     const to = nextHostSeat();
