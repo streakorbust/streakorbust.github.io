@@ -1011,6 +1011,7 @@
       <li><b>Gone a full minute?</b> The bot finishes the round for you, then you sit out with your score frozen.</li>
       <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
       <li><b>Host dropped?</b> They get the same 15 seconds. Then the next player's phone takes over, and the game keeps going.</li>
+      <li><b>Host leaving?</b> They can hand the game to the next player and everyone else keeps playing, or end it for everyone.</li>
       <li><b>Tapped Leave?</b> You're out right away, with no bot. Come back any time with the room code.</li>
       <li>It takes at least 2 players. If everyone else is out, the game pauses until someone's back.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
@@ -1183,6 +1184,8 @@
   let nextTakeover = 0; // guest: don't try again before this time
   let quietUntil = 0; // new host: friends switching over aren't announced as "joined"
   let soloShown = false; // host: the "waiting for players" pause is up
+  let handingOff = false; // host: leaving on purpose, so the room isn't ended for everyone
+  let hostLeftOnPurpose = false; // guest: the host tapped Leave and handed the game on
   let hostUndo = null; // host: { seat, snap } right after someone closes, until the next move
   let netEpoch = 0; // bumps on every create/join so a delayed leave() can't hit a newer room
   const sentEvs = new WeakSet();
@@ -1372,6 +1375,7 @@
       if (!game && !lobbyData) return `Reconnecting… <b>${clock(ms)}</b>`;
       if (ms < BOT_AFTER_MS) return `${hostLabel()} (host) dropped out. Game moves on in <b>${clock(BOT_AFTER_MS - ms + 999)}</b>`;
       const next = successorName();
+      if (hostLeftOnPurpose) return `${hostLabel()} left. Moving the game to ${next ? `${next}'s phone` : 'the next phone'}…`;
       return next ? `Moving the game to ${next}'s phone… <b>${clock(ms)}</b>` : `Reconnecting to the game… <b>${clock(ms)}</b>`;
     }
     if (mode === 'host' && hostOffSince && Date.now() - hostOffSince > 1500) {
@@ -1470,9 +1474,12 @@
       lobbyData = null;
       showLobby();
       saveLobby();
+      hostLeftOnPurpose = false;
       toast(`${oldName ? `<b>${esc(oldName)}</b>` : 'The host'} left, so you're hosting this room now`, 3500);
       return;
     }
+    const leftOnPurpose = hostLeftOnPurpose;
+    hostLeftOnPurpose = false;
     game = Game.takeOver(JSON.parse(JSON.stringify(game.s)));
     game.s.x = game.s.x || { ach: {}, moments: [], maxDef: [] };
     const now = Date.now();
@@ -1487,12 +1494,18 @@
     });
     hostSeat = mySeat;
     lobbyTarget = game.s.target;
+    if (leftOnPurpose && members[oldHost]) {
+      members[oldHost].left = true;
+      members[oldHost].awaySince = now - SIT_OUT_MS;
+      game.leave(oldHost); // out right away, like anyone who taps Leave
+    }
     presence = members.map((m) => m.on);
     rejoining = [];
     botHoldUntil = now + 8000; // give friends' phones a moment to switch over
     setTimeout(hostWatch, 8100);
     saveHosted();
-    toast(`<b>${esc(oldName || 'The host')}</b>'s connection dropped, so your phone is running the game now`, 4000);
+    toast(leftOnPurpose ? `<b>${esc(oldName || 'The host')}</b> left, so your phone is running the game now`
+      : `<b>${esc(oldName || 'The host')}</b>'s connection dropped, so your phone is running the game now`, 4000);
     lastTurnP = null;
     if (!busy) settle();
   }
@@ -1802,6 +1815,14 @@
         toast(d.why === 'full' ? 'That room is full (4 players max)' : 'That game has already started', 3000);
         leaveRoom(true);
         break;
+      case 'handoff':
+        // Skip the 15-second wait: the chosen phone takes over now, the others give it a head start.
+        hostLeftOnPurpose = true;
+        lostSince = Date.now() - BOT_AFTER_MS;
+        lostAsked = false;
+        nextTakeover = d.toCid === myCid ? 0 : Date.now() + 10000;
+        paintConn();
+        break;
       case 'end':
         toast(`${game || lobbyData ? hostLabel() : 'The host'} ended the game`, 3000);
         leaveRoom(true);
@@ -2093,10 +2114,45 @@
     joinTick = setInterval(paint, 1000);
   }
 
+  // The host taps Leave but the others want to keep playing: hand the room to the next connected
+  // player's phone right away (no 15-second wait, since it's on purpose). Like anyone who leaves,
+  // the host is out at once with no bot, and can rejoin later with the room code.
+  function nextHostSeat() {
+    const n = members.length;
+    for (let k = 1; k < n; k++) {
+      const i = (mySeat + k) % n;
+      if (members[i] && members[i].on !== false && members[i].peer && members[i].cid !== myCid) return i;
+    }
+    return null;
+  }
+  function hostHandOff() {
+    const to = nextHostSeat();
+    if (to == null) { leaveRoom(); return; }
+    const name = members[to].name;
+    Net.broadcast({ t: 'handoff', from: mySeat, toCid: members[to].cid });
+    handingOff = true;
+    leaveRoom();
+    handingOff = false;
+    toast(`You left. The game keeps going on <b>${esc(name)}</b>'s phone.`, 3500);
+  }
+  function askHostLeave(inLobby) {
+    const to = nextHostSeat();
+    if (to == null) { leaveRoom(); return; }
+    const who = `<b>${esc(members[to].name)}</b>`;
+    openModal(`<h2>${inLobby ? 'Leave the room?' : 'Leave the game?'}</h2><p>${inLobby ? `${who} can keep the room open for everyone else, or you can close it.` : `The game keeps going on ${who}'s phone, and you can rejoin with the room code. Or end it for everyone.`}</p>
+      <div class="mbtns"><button class="btn pink" id="mHandOff">${inLobby ? `Leave, ${esc(members[to].name)} hosts` : 'Leave, others keep playing'}</button>
+      <button class="btn ghost" id="mEndAll" style="color:var(--bad)">${inLobby ? 'Close the room for everyone' : 'End the game for everyone'}</button>
+      <button class="btn ghost" id="mStay">${inLobby ? 'Stay' : 'Keep playing'}</button></div>`, (m) => {
+      m.querySelector('#mHandOff').onclick = hostHandOff;
+      m.querySelector('#mEndAll').onclick = () => leaveRoom();
+      m.querySelector('#mStay').onclick = inLobby ? closeModal : () => { closeModal(); settle(); };
+    }, '', inLobby ? closeModal : backToTable);
+  }
+
   // silent: the room ended on the other side, just tidy up.
   function leaveRoom(silent) {
     const was = mode;
-    if (was === 'host') { Net.broadcast({ t: 'end' }); store.del(HOSTED); pushForget(Net.code); }
+    if (was === 'host') { if (!handingOff) Net.broadcast({ t: 'end' }); store.del(HOSTED); pushForget(Net.code); }
     if (was === 'guest') { store.del(ROOM); if (!silent) Net.send({ t: 'bye' }); }
     alertsOn = false;
     const epoch = netEpoch;
@@ -2112,7 +2168,7 @@
     clearUndo();
     waitNote('');
     clearTimeout(botTimer); botKey = null; rejoining = [];
-    hostSeat = 0; seatList = []; takingOver = false; nextTakeover = 0; soloShown = false;
+    hostSeat = 0; seatList = []; takingOver = false; nextTakeover = 0; soloShown = false; hostLeftOnPurpose = false;
     showCountdown(null);
     closeModal();
     showSetup();
@@ -2126,7 +2182,7 @@
       ${coverBtn}
       <button class="btn ghost" id="mRules">How to play</button>
       <button class="btn ghost" id="mShare">Share this game</button>
-      <button class="btn ghost" id="mLeave" style="color:var(--bad)">${mode === 'host' ? 'End the game for everyone' : 'Leave the game'}</button>
+      <button class="btn ghost" id="mLeave" style="color:var(--bad)">Leave the game</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
       m.querySelector('#mRules').onclick = showRules;
       m.querySelector('#mShare').onclick = shareApp;
@@ -2134,6 +2190,7 @@
       if (cb) cb.onclick = () => { closeModal(); hostCover(); };
       m.querySelector('#mLeave').onclick = () => {
         const host = mode === 'host';
+        if (host && nextHostSeat() != null) { askHostLeave(false); return; }
         openModal(`<h2>${host ? 'End the game?' : 'Leave the game?'}</h2><p>${host ? 'Everyone in the room will be sent back to the menu.' : 'Your seat stays open, so you can rejoin with the code while the game is on.'}</p>
           <div class="mbtns"><button class="btn pink" id="mYes">${host ? 'End game' : 'Leave'}</button><button class="btn ghost" id="mNo">Keep playing</button></div>`, (mm) => {
           mm.querySelector('#mYes').onclick = () => leaveRoom();
@@ -2216,7 +2273,8 @@
     Net.on('open', () => {
       if (mode !== 'guest') return;
       Net.send({ t: 'hello', cid: myCid, name: prefs.myName });
-      if (lostSince && Date.now() - lostSince > 3000) toast(`Reconnected. You're back in the game.`, 2200);
+      if (lostSince && Date.now() - lostSince > 3000 && !hostLeftOnPurpose) toast(`Reconnected. You're back in the game.`, 2200);
+      hostLeftOnPurpose = false;
       if (lostAsked && !$('#modalWrap').classList.contains('hidden') && $('#modal').querySelector('#mWait')) backToTable();
       showCountdown(null);
     });
@@ -2251,7 +2309,7 @@
     $('#myName').addEventListener('input', (e) => { prefs.myName = e.target.value; store.set(PREFS, prefs); });
     $('#lbShare').onclick = invite;
     $('#lbStart').onclick = () => { if (mode === 'host') hostStart(); };
-    $('#lbLeave').onclick = () => leaveRoom();
+    $('#lbLeave').onclick = () => { if (mode === 'host' && nextHostSeat() != null) askHostLeave(true); else leaveRoom(); };
     bindTarget('#lbTarget', () => lobbyTarget, (v) => {
       if (mode !== 'host') return;
       lobbyTarget = v;
