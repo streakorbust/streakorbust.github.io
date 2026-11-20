@@ -646,6 +646,7 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .lb-p .sw { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); flex: none; }
 .lb-n { flex: 1 1 auto; min-width: 0; font-size: 17px; font-weight: 700; color: var(--pc); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lb-p.empty { background: transparent; border: 1.5px dashed var(--line2); animation: none; }
+.lb-p.away { opacity: .55; animation: none; }
 .lb-p.empty .sw { background: var(--line2); animation: lbPulse 1.4s ease-in-out infinite; }
 .lb-p.empty .lb-n { color: var(--muted); font-weight: 600; font-size: 15px; }
 @keyframes lbPulse { 50% { opacity: .3; } }

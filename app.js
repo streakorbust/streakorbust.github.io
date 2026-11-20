@@ -1461,7 +1461,9 @@
     pushSubscribe(code).then((ok) => { alertsOn = ok; renderAlerts(); });
     if (!game) {
       // Still in the lobby: just keep the room open with this phone as host.
-      members = [{ cid: myCid, name: prefs.myName || 'Player', peer: null, on: true }];
+      const now2 = Date.now();
+      members = [{ cid: myCid, name: prefs.myName || 'Player', peer: null, on: true }].concat((lobbyData ? lobbyData.members.slice(1) : [])
+        .filter((m) => m.cid !== myCid).map((m) => ({ cid: m.cid, name: m.name, peer: null, on: false, awaySince: now2, restored: true })));
       mySeat = 0;
       hostSeat = 0;
       lobbyTarget = lobbyData ? lobbyData.target : 200;
@@ -1545,6 +1547,14 @@
       askKeepWaiting();
     }
     if (mode === 'host' && game) soloCheck();
+    if (mode === 'host' && !game && members.some((m) => m.on === false && m.awaySince && Date.now() - m.awaySince > BOT_AFTER_MS)) {
+      members = members.filter((m) => {
+        if (m.on !== false || !m.awaySince || Date.now() - m.awaySince <= BOT_AFTER_MS) return true;
+        if (!m.restored) toast(`<b>${esc(m.name)}</b> left the room`, 2500);
+        return false;
+      });
+      lobbyChanged();
+    }
     paintConn();
     // A dropped player's AWAY tag turns into BOT once their 15 seconds are up.
     if (game && mode !== 'local') {
@@ -1594,14 +1604,14 @@
   }
 
   function lobbyChanged() {
-    Net.broadcast({ t: 'lobby', members: members.map(({ cid, name }) => ({ cid, name })), target: lobbyTarget });
+    Net.broadcast({ t: 'lobby', members: members.map(({ cid, name, on }) => ({ cid, name, on: on !== false })), target: lobbyTarget });
     if ($('#lobby').classList.contains('active')) renderLobby();
     saveLobby();
   }
   // Waiting in the lobby counts too: if the phone closes the page, the room can be reopened.
   function saveLobby() {
     if (mode !== 'host' || game || !Net.code) return;
-    store.set(HOSTED, { code: Net.code, host: myCid, members: [{ cid: myCid, name: members[0] ? members[0].name : prefs.myName }], target: lobbyTarget, state: null, lobby: true, when: Date.now() });
+    store.set(HOSTED, { code: Net.code, host: myCid, members: members.map(({ cid, name }) => ({ cid, name })), target: lobbyTarget, state: null, lobby: true, when: Date.now() });
   }
 
   function hostMsg(d, peerId) {
@@ -1641,7 +1651,7 @@
         m = { cid, name, peer: peerId, on: true };
         members.push(m);
         if (Date.now() > quietUntil) joinAlert(name);
-      } else { m.peer = peerId; m.on = true; m.name = name; }
+      } else { m.peer = peerId; m.on = true; m.name = name; m.awaySince = null; m.restored = false; }
       lobbyChanged();
       return;
     }
@@ -1682,7 +1692,7 @@
     const m = members.find((x) => x.peer === peerId);
     if (!m) return;
     m.peer = null;
-    if (!game) { members = members.filter((x) => x !== m); lobbyChanged(); toast(`<b>${esc(m.name)}</b> left the room`, 2500); return; }
+    if (!game) { m.on = false; m.awaySince = Date.now(); lobbyChanged(); return; } // 15 seconds to come back (a reload, a blip)
     m.on = false;
     m.awaySince = Date.now();
     m.totalAtDrop = game.s.players[members.indexOf(m)] ? game.s.players[members.indexOf(m)].total : 0;
@@ -1694,7 +1704,8 @@
   }
 
   function hostStart() {
-    if (members.length < 2) return;
+    members = members.filter((m) => m.on !== false); // anyone still reconnecting misses this game
+    if (members.length < 2) { lobbyChanged(); return; }
     clearUndo();
     hostUndo = null;
     mySeat = members.findIndex((m) => m.cid === myCid);
@@ -1914,14 +1925,15 @@
     $('#lobby').classList.toggle('is-host', isHost);
     $('#lbCode').textContent = Net.code || '····';
     $('#lbCount').textContent = list.length ? `${list.length} of ${MAX_PLAYERS}` : '';
-    $('#lbPlayers').innerHTML = list.map((m, i) => `<div class="lb-p" style="--pc:${pc(i)}"><span class="sw"></span><span class="lb-n">${esc(m.name)}</span>`
-      + `${i === 0 ? '<span class="tag-s dealer">Host</span>' : ''}${m.cid === myCid ? '<span class="tag-s you">You</span>' : ''}</div>`).join('')
+    const here = list.filter((m) => m.on !== false).length;
+    $('#lbPlayers').innerHTML = list.map((m, i) => `<div class="lb-p${m.on === false ? ' away' : ''}" style="--pc:${pc(i)}"><span class="sw"></span><span class="lb-n">${esc(m.name)}</span>`
+      + `${m.on === false ? '<span class="tag-s away">Reconnecting…</span>' : ''}${i === 0 ? '<span class="tag-s dealer">Host</span>' : ''}${m.cid === myCid ? '<span class="tag-s you">You</span>' : ''}</div>`).join('')
       + (list.length < MAX_PLAYERS ? `<div class="lb-p empty"><span class="sw"></span><span class="lb-n">${list.length ? 'Waiting for friends…' : 'Connecting…'}</span></div>` : '');
     paintTarget('#lbTarget', target);
     $('#lbNote').textContent = isHost
-      ? (list.length < 2 ? 'Send friends the code or invite link. You need at least 2 players.' : `Ready when you are. First to ${target} wins.`)
+      ? (here < 2 ? 'Send friends the code or invite link. You need at least 2 players.' : `Ready when you are. First to ${target} wins.`)
       : `Waiting for ${list[0] ? list[0].name : 'the host'} to start. First to ${target} wins.`;
-    $('#lbStart').disabled = list.length < 2;
+    $('#lbStart').disabled = here < 2;
     renderAlerts();
   }
 
@@ -1969,7 +1981,7 @@
     mode = 'host';
     game = null;
     try {
-      await Net.host(reopen ? reopen.code : null);
+      await Net.host(reopen ? reopen.code : null, reopen ? { tries: 3 } : {});
     } catch (e) {
       if (epoch !== netEpoch) return;
       mode = 'local';
@@ -1989,7 +2001,9 @@
     alertsOn = false;
     pushSubscribe(Net.code).then((ok) => { alertsOn = ok; renderAlerts(); });
     if (reopen && reopen.lobby) {
-      members = [{ cid: myCid, name, peer: null, on: true }];
+      const now = Date.now();
+      members = [{ cid: myCid, name, peer: null, on: true }].concat((reopen.members || []).filter((m) => m.cid !== myCid)
+        .map((m) => ({ cid: m.cid, name: m.name, peer: null, on: false, awaySince: now, restored: true })));
       mySeat = 0;
       lobbyTarget = reopen.target || 200;
       showLobby();
