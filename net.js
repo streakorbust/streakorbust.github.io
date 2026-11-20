@@ -7,6 +7,10 @@
   // The App Store app ships its own copy of PeerJS (no code loaded from the internet); the website uses the CDN.
   const PEERJS_URL = global.Capacitor ? 'peerjs.min.js' : 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
   const PREFIX = 'streakorbust-room-';
+  // Our own connection server (signal/worker.js on Cloudflare): phones meet there, then talk directly.
+  const SIGNAL = { host: 'signal.streakorbust.com', port: 443, path: '/', secure: true, key: 'peerjs' };
+  // Guests' ids carry the room code too, so everyone in a room meets on the same part of the server.
+  const guestId = (c) => `streakorbust-g-${c}-${Math.random().toString(36).slice(2, 10)}`;
   const ALPHABET = 'BCDFGHJKLMNPQRSTVWXZ'; // no vowels: codes never spell words, no 0/O or 1/I mixups
   const newCode = () => Array.from({ length: 4 }, () => ALPHABET[Math.floor(Math.random() * ALPHABET.length)]).join('');
   const cleanCode = (c) => String(c || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
@@ -54,7 +58,7 @@
   }
 
   // Relay (TURN) servers from our own /turn endpoint, so friends on strict networks can still
-  // connect. If that isn't available, PeerJS's built-in defaults are used, as before.
+  // connect. If that isn't available, PeerJS's built-in defaults are used.
   let iceCache = null;
   async function peerOptions() {
     if (iceCache && Date.now() - iceCache.t < 6 * 3600e3) return iceCache.opts;
@@ -66,12 +70,12 @@
       clearTimeout(timer);
       const d = await r.json();
       if (d.iceServers && d.iceServers.length) {
-        const opts = { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }].concat(d.iceServers) } };
+        const opts = Object.assign({}, SIGNAL, { config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }].concat(d.iceServers) } });
         iceCache = { opts, t: Date.now() };
         return opts;
       }
     } catch (e) { /* no relay: fall back to the defaults */ }
-    return undefined;
+    return Object.assign({}, SIGNAL);
   }
 
   // ---------- host ----------
@@ -134,7 +138,7 @@
       let settled = false;
       const ok = () => { if (!settled) { settled = true; resolve(code); } };
       const fail = (e) => { if (!settled) { settled = true; left = true; reset(); reject(e); } };
-      const p = opts ? new Peer(undefined, opts) : new Peer();
+      const p = new Peer(guestId(code), opts);
       peer = p;
       keepSignal(p);
       p.on('open', () => connect(ok, fail));
@@ -186,7 +190,7 @@
     code = cleanCode(wanted);
     reset();
     everConnected = true; // so every failure just schedules another try
-    const p = opts ? new Peer(undefined, opts) : new Peer();
+    const p = new Peer(guestId(code), opts);
     peer = p;
     keepSignal(p);
     p.on('open', () => connect());
