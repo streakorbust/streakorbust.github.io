@@ -378,5 +378,100 @@ test('random full games never crash', () => {
   }
 });
 
+// Every card in the deck is somewhere exactly once: draw pile, discards, hands, Lifelines, busts,
+// cards set aside during a Hat Trick, or an action card waiting for a target.
+function allIds(s) {
+  const ids = [];
+  const add = (c) => { if (c && c.id != null) ids.push(c.id); };
+  s.deck.forEach(add); s.discard.forEach(add);
+  s.players.forEach((p) => { p.cards.forEach(add); p.shields.forEach(add); add(p.bust); });
+  Object.values(s.setAside).forEach((l) => l.forEach(add));
+  if (s.awaiting && s.awaiting.card) add(s.awaiting.card);
+  s.tasks.forEach((t) => { if (t.t === 'target') add(t.card); });
+  return ids;
+}
+function checkCards(s, where) {
+  const ids = allIds(s).sort((a, b) => a - b);
+  if (ids.length !== 94) throw new Error(`${where}: ${ids.length} cards`);
+  for (let k = 0; k < 94; k++) if (ids[k] !== k) throw new Error(`${where}: card ${k} missing or duplicated`);
+}
+
+test('every card stays unique and accounted for, with leaves and host handoffs mixed in', () => {
+  for (let n = 0; n < 1500; n++) {
+    const names = Array.from({ length: 2 + (n % 3) }, (_, i) => 'P' + i);
+    let g = new Game(names, { target: 120 });
+    g.startRound();
+    let guard = 0;
+    while (g.s.phase !== 'over' && guard++ < 20000) {
+      const a = g.s.awaiting;
+      const r = Math.random();
+      if (a.type === 'summary') {
+        g.s.players.forEach((p) => { p.out = false; }); // anyone who left comes back
+        g.nextRound();
+      } else if (r < 0.02) {
+        g.leave(Math.floor(Math.random() * names.length)); // someone taps Leave
+        if (g.s.phase === 'play' && g.s.players.every((p) => p.status !== 'active') && !g.s.awaiting) throw new Error('stuck after leave');
+      } else if (r < 0.04) {
+        const guest = JSON.parse(JSON.stringify(g.s)); // the host drops: a friend's phone takes over
+        guest.deck = guest.deck.map(() => 0);
+        g = Game.takeOver(guest);
+      } else if (a.type === 'decide') { const q = Math.random(); if (q < 0.1 && g.canSkip(a.p)) g.skip(); else if (q < 0.7) g.hit(); else g.stay(); }
+      else if (a.type === 'target') g.chooseTarget(a.options[Math.floor(Math.random() * a.options.length)]);
+      checkCards(g.s, `game ${n}`);
+      if (!g.s.awaiting) throw new Error(`game ${n}: nothing to do (stuck)`);
+    }
+    if (g.s.phase !== 'over') throw new Error(`game ${n} did not finish`);
+  }
+});
+
+test('totals always add up, and the game ends only with a single leader at the target', () => {
+  for (let n = 0; n < 1500; n++) {
+    const names = Array.from({ length: 2 + (n % 3) }, (_, i) => 'P' + i);
+    const g = new Game(names, { target: 150 });
+    g.startRound();
+    let guard = 0;
+    while (g.s.phase !== 'over' && guard++ < 20000) {
+      const a = g.s.awaiting;
+      if (a.type === 'decide') (Math.random() < 0.65 ? g.hit() : g.stay());
+      else if (a.type === 'target') g.chooseTarget(a.options[Math.floor(Math.random() * a.options.length)]);
+      else if (a.type === 'summary') g.nextRound();
+      if (g.s.summary && (g.s.phase === 'summary' || g.s.phase === 'over')) {
+        for (const row of g.s.summary.rows) {
+          if (row.score < 0) throw new Error('negative round score');
+          if (row.after !== row.before + row.score) throw new Error('total does not add up');
+          if (g.s.players[row.i].total !== row.after) throw new Error('total mismatch');
+        }
+        const totals = g.s.players.map((p) => p.total);
+        const max = Math.max(...totals);
+        const unique = totals.filter((t) => t === max).length === 1;
+        if (g.s.phase === 'over' && !(max >= 150 && unique && totals[g.s.winner] === max)) throw new Error('bad winner');
+        if (g.s.phase === 'summary' && max >= 150 && unique) throw new Error('should have ended');
+      }
+    }
+  }
+});
+
+test('busting keeps + cards only; a Lifeline saves you; Chill banks your points', () => {
+  const g = game(['A', 'B'], [N(5), N(3), M(4), X2(), N(5)]);
+  g.hit(); g.stay();   // A: +4, B closes with 3
+  g.hit();             // A: x2
+  g.hit();             // A: 5 again -> bust
+  eq(st(g, 0), 'busted');
+  eq(g.s.summary.rows[0].score, 4, 'bust keeps the +4 only');
+  eq(g.s.summary.rows[1].score, 3);
+  const h = game(['A', 'B'], [N(6), N(2), A('lock')]);
+  h.hit(); h.chooseTarget(1);
+  eq(st(h, 1), 'locked');
+  h.stay();
+  eq(h.s.summary.rows[1].score, 2, 'chilled player keeps their points');
+});
+
+test('the 0 card counts toward a Clean Sweep', () => {
+  const g = game(['A', 'B'], [N(0), N(12), N(1), N(2), N(3), N(4), N(5), N(6)]);
+  for (let k = 0; k < 6; k++) { g.hit(); if (g.s.phase === 'play' && g.s.awaiting.p === 1) g.stay(); }
+  eq(g.s.players[0].sweep, true);
+  eq(g.s.summary.rows[0].score, 0 + 1 + 2 + 3 + 4 + 5 + 6 + 15);
+});
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="summary" class="${fail ? 'bad' : 'ok'}">${pass} passed, ${fail} failed</h2>`);
 </script></body></html>
