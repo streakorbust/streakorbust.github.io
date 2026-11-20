@@ -2109,13 +2109,11 @@
     const cover = mode === 'host' && a && a.p != null && presence[a.p] === false && (a.type === 'decide' || a.type === 'target');
     const coverBtn = cover ? `<button class="btn ghost" id="mCover">Move for ${esc(game.s.players[a.p].name)} (away)</button>` : '';
     openModal(`<h2>Room ${esc(Net.code || '')}</h2><div class="menu-list">
-      <button class="btn ghost" id="mInvite">Invite friends</button>
       ${coverBtn}
       <button class="btn ghost" id="mRules">How to play</button>
       <button class="btn ghost" id="mShare">Share this game</button>
       <button class="btn ghost" id="mLeave" style="color:var(--bad)">${mode === 'host' ? 'End the game for everyone' : 'Leave the game'}</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
-      m.querySelector('#mInvite').onclick = invite;
       m.querySelector('#mRules').onclick = showRules;
       m.querySelector('#mShare').onclick = shareApp;
       const cb = m.querySelector('#mCover');
