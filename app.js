@@ -552,7 +552,8 @@
       const extrasHTML = extras.map((c) => cardHTML(c, c.id === newId ? 'new' : '')).join('');
       const tag = (i === turnP ? `<span class="tag-s turn">${isMine(i) ? 'YOUR TURN' : 'TURN'}</span>` : statusTag(p))
         + (online && i === mySeat ? '<span class="tag-s you">You</span>' : '')
-        + (online && presence[i] === false && p.status !== 'sitout' ? '<span class="tag-s bot">BOT</span>' : '')
+        + (online && presence[i] === false && p.status !== 'sitout'
+          ? (awayMs(i) != null && awayMs(i) < BOT_AFTER_MS ? '<span class="tag-s away">Away</span>' : '<span class="tag-s bot">BOT</span>') : '')
         + (online && rejoining[i] ? '<span class="tag-s rejoin">Rejoining</span>' : '');
       return `<div class="${cls.join(' ')}" data-i="${i}" style="--pc:${pc(i)}">
         <div class="seat-head">
@@ -1002,10 +1003,10 @@
       <li>Out of cards? The discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li><b>Lost your connection?</b> A bot plays your turns for up to 2 minutes, so nobody has to wait.</li>
-      <li><b>Gone longer than that?</b> The bot finishes any move it's in the middle of, then stops. You sit out, with your score frozen.</li>
+      <li><b>Lost your connection?</b> Everyone waits 30 seconds for you. After that, a bot plays your turns so the game keeps moving.</li>
+      <li><b>Gone a full minute?</b> The bot stops, and you sit out with your score frozen.</li>
       <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
-      <li>The host's phone runs the game, so if the host leaves, everyone waits for them.</li></ul>
+      <li>The host's phone runs the game. If the host drops, everyone waits, and after 30 seconds you can choose to leave.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
 
   function showRules() {
@@ -1239,21 +1240,33 @@
   }
 
   // ---------- away players: a bot plays for them ----------
-  // While someone's phone is disconnected, the host's phone plays their turns right away with a
-  // simple bot (they're tagged BOT). When they reconnect they're tagged REJOINING, and they take
-  // over again at the start of their next turn. Gone 2+ minutes: they sit out from the next round.
+  // Someone's phone drops: they're tagged AWAY and everyone gets 30 seconds to see whether they
+  // come right back. Still gone after 30 seconds: the host's phone plays their turns with a simple
+  // bot (tagged BOT). Gone a full minute: the bot stops and they sit out with their score frozen.
+  // Whenever they reconnect they're tagged REJOINING and take over at the start of their next turn.
   const BOT_DELAY_MS = 900;
-  const SIT_OUT_MS = 2 * 60000;
+  const BOT_AFTER_MS = 30000;
+  const SIT_OUT_MS = 60000;
+  const HOST_WAIT_MS = 30000; // guests can choose to leave once the host has been gone this long
   let botTimer = null;
   let botKey = null;
+  let graceTimer = null;
   let rejoining = []; // guests: seats whose player is back but waiting for their next turn
+  let goneAt = []; // guests: when each away player dropped (in this phone's clock), from the host
+
+  // How long has this seat's player been away? null if they're here.
+  function awayMs(i) {
+    if (mode === 'host') { const m = members[i]; return m && !m.on && m.awaySince ? Date.now() - m.awaySince : null; }
+    return presence[i] === false && goneAt[i] ? Date.now() - goneAt[i] : null;
+  }
+  const goneList = () => members.map((m) => (!m.on && m.awaySince ? Date.now() - m.awaySince : null));
 
   // Is the bot in charge of this seat for the current decision?
   let botHoldUntil = 0;
   function botRuns(seat, a) {
     const m = members[seat];
     if (!m || m.cid === myCid || Date.now() < botHoldUntil) return false;
-    if (!m.on) return true;
+    if (!m.on) return !!m.awaySince && Date.now() - m.awaySince >= BOT_AFTER_MS;
     return !!m.rejoin && a.type !== 'decide';
   }
 
@@ -1292,6 +1305,13 @@
     }
     const key = a && a.p != null && (a.type === 'decide' || a.type === 'target') && botRuns(a.p, a)
       ? `${game.s.round}:${a.type}:${a.p}:${game.s.deck.length}:${game.s.discard.length}` : null;
+    // Their turn, but they've only just dropped: check again the moment the 30 seconds are up.
+    clearTimeout(graceTimer);
+    const am = a && a.p != null ? members[a.p] : null;
+    if (!key && am && !am.on && am.awaySince && (a.type === 'decide' || a.type === 'target')) {
+      const wait = Math.max(am.awaySince + BOT_AFTER_MS, botHoldUntil) - Date.now();
+      if (wait > 0) graceTimer = setTimeout(hostWatch, wait + 50);
+    }
     if (key === botKey) return;
     clearTimeout(botTimer);
     botKey = key;
@@ -1308,7 +1328,7 @@
 
   // ---------- connection notes ----------
   // Nobody should stare at a frozen screen. Whenever the room link is down, a note at the top says
-  // what's going on, with a running clock. After 2 minutes, guests are offered a way out.
+  // what's going on, with a running clock. After 30 seconds, guests are offered a way out.
   let lostSince = null; // guest: when the link to the host dropped
   let lostAsked = false; // guest: already asked "keep waiting or leave?"
   let hostOffSince = null; // host: when this phone lost its own connection
@@ -1331,6 +1351,17 @@
     if (mode === 'host' && hostOffSince && Date.now() - hostOffSince > 1500) {
       return `You lost your connection. Reconnecting… <b>${clock(Date.now() - hostOffSince)}</b>`;
     }
+    // Someone just dropped: everyone sees the 30-second wait count down, whoever's turn it is.
+    if (game && mode !== 'local') {
+      const waiting = game.s.players.map((p, i) => ({ p, i, ms: awayMs(i) }))
+        .filter((x) => x.i !== mySeat && x.ms != null && x.ms < BOT_AFTER_MS && x.p.status !== 'sitout')
+        .sort((x, y) => y.ms - x.ms);
+      if (waiting.length) {
+        const w = waiting[0];
+        const more = waiting.length > 1 ? ` (+${waiting.length - 1} more)` : '';
+        return `<b>${esc(w.p.name)}</b> dropped out${more}. Bot takes over in <b>${clock(BOT_AFTER_MS - w.ms + 999)}</b>`;
+      }
+    }
     return '';
   }
   function paintConn() {
@@ -1342,7 +1373,7 @@
     if (lb) lb.innerHTML = html;
   }
   function askKeepWaiting() {
-    openModal(`<h2>Still waiting</h2><p>${hostLabel()} has been disconnected for 2 minutes. When they're back, the game picks up right where it left off. You can keep waiting or leave the room.</p>
+    openModal(`<h2>Still waiting</h2><p>${hostLabel()} has been disconnected for 30 seconds. When they're back, the game picks up right where it left off. You can keep waiting or leave the room.</p>
       <div class="mbtns"><button class="btn pink" id="mWait">Keep waiting</button><button class="btn ghost" id="mLeaveRoom">Leave room</button></div>`, (m) => {
       m.querySelector('#mWait').onclick = backToTable;
       m.querySelector('#mLeaveRoom').onclick = () => leaveRoom();
@@ -1362,12 +1393,18 @@
       if (off && !hostOffSince) hostOffSince = Date.now();
       else if (!off && hostOffSince) { const was = Date.now() - hostOffSince; hostOffSince = null; if (was > 1500) hostBack(); }
     } else hostOffSince = null;
-    if (mode === 'guest' && lostSince && !lostAsked && Date.now() - lostSince > 120000 && $('#modalWrap').classList.contains('hidden')) {
+    if (mode === 'guest' && lostSince && !lostAsked && Date.now() - lostSince > HOST_WAIT_MS && $('#modalWrap').classList.contains('hidden')) {
       lostAsked = true;
       askKeepWaiting();
     }
     paintConn();
+    // A dropped player's AWAY tag turns into BOT once their 30 seconds are up.
+    if (game && mode !== 'local') {
+      const sig = game.s.players.map((_, i) => { const ms = awayMs(i); return ms == null ? '' : ms < BOT_AFTER_MS ? 'a' : 'b'; }).join();
+      if (sig !== tagSig) { tagSig = sig; if (!busy && $('#table').classList.contains('active')) render(game.s, focusP); }
+    }
   }, 1000);
+  let tagSig = '';
   // Host: every few seconds, sit out anyone who's been gone too long. The bot stops right away:
   // their hand for this round is set aside (so their total stays frozen) and they get no more turns
   // until they come back. If the bot is in the middle of a move for them, it finishes that first.
@@ -1387,13 +1424,14 @@
         p.status = 'sitout';
       }
       changed = true;
-      const note = `<b>${esc(m.name)}</b> has been gone 2 minutes, so the bot stops and they sit out until they're back`;
+      if (m.left) return; // they chose to leave; everyone was already told
+      const note = `<b>${esc(m.name)}</b> has been gone a minute, so the bot stops. They sit out until they're back.`;
       toast(note, 3200);
       members.forEach((x) => { if (x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
     });
     if (changed) {
       saveHosted();
-      Net.broadcast({ t: 'sync', state: strip(s), seats: seatCids(), presence, rejoin: members.map((x) => !!(x.on && x.rejoin)) });
+      Net.broadcast({ t: 'sync', state: strip(s), seats: seatCids(), presence, rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList() });
       if (!busy && $('#table').classList.contains('active')) render(s, focusP);
     }
   }, 5000);
@@ -1406,13 +1444,19 @@
   function presenceChanged() {
     presence = members.map((m) => m.cid === myCid || m.on);
     rejoining = members.map((m) => !!(m.on && m.rejoin));
-    Net.broadcast({ t: 'presence', on: presence, rejoin: rejoining });
+    Net.broadcast({ t: 'presence', on: presence, rejoin: rejoining, gone: goneList() });
     if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
   }
 
   function lobbyChanged() {
     Net.broadcast({ t: 'lobby', members: members.map(({ cid, name }) => ({ cid, name })), target: lobbyTarget });
     if ($('#lobby').classList.contains('active')) renderLobby();
+    saveLobby();
+  }
+  // Waiting in the lobby counts too: if the phone closes the page, the room can be reopened.
+  function saveLobby() {
+    if (mode !== 'host' || game || !Net.code) return;
+    store.set(HOSTED, { code: Net.code, members: [{ cid: myCid, name: members[0] ? members[0].name : prefs.myName }], target: lobbyTarget, state: null, lobby: true, when: Date.now() });
   }
 
   function hostMsg(d, peerId) {
@@ -1425,7 +1469,7 @@
       if (game) {
         if (!m) { Net.sendTo(peerId, { t: 'refuse', why: 'started' }); Net.kick(peerId); return; }
         const wasOff = !m.on;
-        m.peer = peerId; m.on = true; m.awaySince = null;
+        m.peer = peerId; m.on = true; m.awaySince = null; m.left = false;
         if (wasOff && !m.fresh) m.rejoin = true; // takes over again at the start of their next turn
         const fresh = m.fresh;
         m.fresh = false;
@@ -1437,7 +1481,7 @@
         }
         // Tell the returning player what happened while they were gone, and let everyone else know.
         const back = wasOff && !fresh ? { gained: seatP && m.totalAtDrop != null ? seatP.total - m.totalAtDrop : 0 } : null;
-        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)), back });
+        Net.sendTo(peerId, { t: 'sync', state: strip(game.s), seats: seatCids(), presence: members.map((x) => x.cid === myCid || x.on), rejoin: members.map((x) => !!(x.on && x.rejoin)), gone: goneList(), back });
         presenceChanged();
         if (back) {
           const note = `<b>${esc(m.name)}</b> is back and plays on their next turn`;
@@ -1451,26 +1495,51 @@
         if (members.length >= MAX_PLAYERS) { Net.sendTo(peerId, { t: 'refuse', why: 'full' }); Net.kick(peerId); return; }
         m = { cid, name, peer: peerId, on: true };
         members.push(m);
+        joinAlert(name);
       } else { m.peer = peerId; m.on = true; m.name = name; }
       lobbyChanged();
       return;
     }
     const m = members.find((x) => x.peer === peerId);
-    if (!m || !game) return;
+    if (!m) return;
+    if (d.t === 'bye') { guestQuit(m); return; }
+    if (!game) return;
     if (d.t === 'act') hostApply(members.indexOf(m), String(d.a), Number(d.i));
+  }
+
+  // A guest tapped Leave. In the lobby they're simply gone. Mid-game they sit out right away (no
+  // bot, no waiting); they can still come back with the room code and play from their next turn.
+  function guestQuit(m) {
+    m.peer = null;
+    if (!game) {
+      members = members.filter((x) => x !== m);
+      lobbyChanged();
+      toast(`<b>${esc(m.name)}</b> left the room`, 2500);
+      return;
+    }
+    const i = members.indexOf(m);
+    m.on = false;
+    m.left = true;
+    m.awaySince = Date.now() - SIT_OUT_MS; // past the bot and sit-out limits: they're out now
+    m.totalAtDrop = game.s.players[i] ? game.s.players[i].total : 0;
+    presenceChanged();
+    hostWatch();
+    const note = `<b>${esc(m.name)}</b> left the game. They can come back any time with the room code.`;
+    toast(note, 3200);
+    members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
   }
 
   function hostLeft(peerId) {
     const m = members.find((x) => x.peer === peerId);
     if (!m) return;
     m.peer = null;
-    if (!game) { members = members.filter((x) => x !== m); lobbyChanged(); return; }
+    if (!game) { members = members.filter((x) => x !== m); lobbyChanged(); toast(`<b>${esc(m.name)}</b> left the room`, 2500); return; }
     m.on = false;
     m.awaySince = Date.now();
     m.totalAtDrop = game.s.players[members.indexOf(m)] ? game.s.players[members.indexOf(m)].total : 0;
     presenceChanged();
     hostWatch();
-    const note = `<b>${esc(m.name)}</b> dropped out. A bot is playing for them until they're back.`;
+    const note = `<b>${esc(m.name)}</b> dropped out. If they're not back in 30 seconds, a bot plays for them.`;
     toast(note, 3200);
     members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
   }
@@ -1498,10 +1567,13 @@
   function guestMsg(d) {
     if (!d || typeof d !== 'object') return;
     switch (d.t) {
-      case 'lobby':
+      case 'lobby': {
+        const had = lobbyData ? lobbyData.members.map((x) => x.cid) : null;
         lobbyData = d;
+        if (had) d.members.forEach((x) => { if (!had.includes(x.cid) && x.cid !== myCid) joinAlert(x.name); });
         if (!game) showLobby();
         break;
+      }
       case 'start':
         if (Net.code) store.set(ROOM, { code: Net.code, when: Date.now() });
         clearPending();
@@ -1522,6 +1594,7 @@
         clearUndo();
         mySeat = d.seats.indexOf(myCid);
         presence = d.presence || presence;
+        if (d.gone) setGone(d.gone);
         game = Game.load(d.state);
         const a = game.s.awaiting;
         lastTurnP = a && a.p != null ? a.p : null;
@@ -1555,6 +1628,7 @@
       case 'presence':
         presence = d.on || [];
         rejoining = d.rejoin || [];
+        setGone(d.gone || []);
         if (game && !busy && $('#table').classList.contains('active')) render(game.s, focusP);
         break;
       case 'refuse':
@@ -1562,10 +1636,113 @@
         leaveRoom(true);
         break;
       case 'end':
-        toast('The host ended the game', 3000);
+        toast(`${game || lobbyData ? hostLabel() : 'The host'} ended the game`, 3000);
         leaveRoom(true);
         break;
     }
+  }
+
+  function setGone(list) { goneAt = list.map((ms) => (ms == null ? null : Date.now() - ms)); }
+
+  // ---------- join alerts ----------
+  // Someone joins your room: a pop-up, a short chime, and a buzz (where phones allow it). If the
+  // game is in the background, a notification too. Sound needs one tap on the page first.
+  let actx = null;
+  document.addEventListener('pointerdown', () => {
+    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { /* no sound */ }
+  });
+  function chime() {
+    try {
+      if (actx) {
+        const t0 = actx.currentTime;
+        [660, 880].forEach((f, k) => {
+          const o = actx.createOscillator();
+          const g = actx.createGain();
+          const at = t0 + k * 0.13;
+          o.frequency.value = f;
+          g.gain.setValueAtTime(0.0001, at);
+          g.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+          o.connect(g).connect(actx.destination);
+          o.start(at);
+          o.stop(at + 0.3);
+        });
+      }
+    } catch (e) { /* no sound */ }
+    try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([60, 50, 60]); } catch (e) { /* no buzz */ }
+  }
+  function joinAlert(name) {
+    toast(`<b>${esc(name)}</b> joined!`, 2600);
+    chime();
+    if (mode === 'host' && document.hidden) showAlert(`${name} joined your room`, 'Tap to get the game going.');
+  }
+
+  // ---------- lock-screen alerts (Web Push) ----------
+  // The host can ask to be alerted when friends join. If the host's phone has the game in the
+  // background (say, in Messages sending the invite), a friend who taps the link can't reach the
+  // room, so their phone asks our server to send the host a notification. Works on Android, and
+  // on iPhone once the game is added to the Home Screen.
+  const pushOK = () => !NATIVE && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const iosBrowser = () => /iP(hone|ad|od)/.test(navigator.userAgent) && !(window.navigator.standalone || matchMedia('(display-mode: standalone)').matches);
+  const fromB64u = (s) => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - (s.length % 4)) % 4)); return Uint8Array.from(b, (c) => c.charCodeAt(0)); };
+  const API = (path) => (location.protocol.startsWith('http') && !/^(localhost|127\.0\.0\.1)$/.test(location.hostname) ? '' : SITE_URL.replace(/\/$/, '')) + path;
+  let alertsOn = false;
+  async function pushSubscribe(code) {
+    if (!pushOK() || Notification.permission !== 'granted' || !code) return false;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) {
+        const k = await (await fetch(API('/push/key'), { cache: 'no-store' })).json();
+        if (!k.key) return false;
+        sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: fromB64u(k.key) });
+      }
+      const r = await fetch(API('/push/subscribe'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: code, sub: sub.toJSON() }) });
+      return !!(r.ok && (await r.json()).ok);
+    } catch (e) { return false; }
+  }
+  async function pushForget(code) {
+    if (!pushOK() || !code) return;
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) fetch(API('/push/forget'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: code, endpoint: sub.endpoint }) }).catch(() => {});
+    } catch (e) { /* nothing to forget */ }
+  }
+  async function showAlert(title, body) {
+    try {
+      if (!pushOK() || Notification.permission !== 'granted') return;
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification(title, { body, icon: 'icons/icon-192.png', tag: 'join', renotify: true });
+    } catch (e) { /* the pop-up is enough */ }
+  }
+  // Friend's phone: the room isn't answering, so ask the server to alert the host.
+  async function pingHost(code) {
+    try {
+      const r = await fetch(API('/push/notify'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ room: code, name: prefs.myName || '' }) });
+      return !!(r.ok && (await r.json()).sent);
+    } catch (e) { return false; }
+  }
+  async function turnOnAlerts() {
+    try {
+      const ok = (await Notification.requestPermission()) === 'granted';
+      alertsOn = ok && (await pushSubscribe(Net.code));
+      if (!alertsOn) toast(ok ? "Alerts aren't available right now" : 'Alerts are off. You can turn them on in your phone settings.', 3000);
+    } catch (e) { alertsOn = false; }
+    renderAlerts();
+  }
+  function renderAlerts() {
+    const el = $('#lbAlerts');
+    if (!el) return;
+    let html = '';
+    if (mode === 'host' && !game) {
+      if (alertsOn) html = "<span class=\"lb-alert-on\">🔔 You'll get a notification when friends join</span>";
+      else if (pushOK() && Notification.permission !== 'denied') html = '<button class="btn link" id="lbAlertBtn" type="button">🔔 Notify me when friends join</button>';
+      else if (iosBrowser()) html = '<span class="lb-alert-tip">Tip: add the game to your Home Screen to get a notification when friends join.</span>';
+    }
+    el.innerHTML = html;
+    const b = $('#lbAlertBtn');
+    if (b) b.onclick = turnOnAlerts;
   }
 
   // ---------- lobby ----------
@@ -1588,6 +1765,7 @@
       ? (list.length < 2 ? 'Send friends the code or invite link. You need at least 2 players.' : `Ready when you are. First to ${target} wins.`)
       : `Waiting for ${list[0] ? list[0].name : 'the host'} to start. First to ${target} wins.`;
     $('#lbStart').disabled = list.length < 2;
+    renderAlerts();
   }
 
   // In the App Store app, links point at the website so friends without the app can join too.
@@ -1644,8 +1822,19 @@
     }
     if (epoch !== netEpoch) return;
     setNetBusy(false);
+    alertsOn = false;
+    pushSubscribe(Net.code).then((ok) => { alertsOn = ok; renderAlerts(); });
+    if (reopen && reopen.lobby) {
+      members = [{ cid: myCid, name, peer: null, on: true }];
+      mySeat = 0;
+      lobbyTarget = reopen.target || 200;
+      showLobby();
+      saveLobby();
+      toast(`Room <b>${esc(Net.code)}</b> is open again`, 2500);
+      return;
+    }
     if (reopen) {
-      members = reopen.members.map((m) => ({ cid: m.cid, name: m.name, peer: null, on: m.cid === myCid, fresh: true }));
+      members = reopen.members.map((m) => ({ cid: m.cid, name: m.name, peer: null, on: m.cid === myCid, fresh: true, awaySince: m.cid === myCid ? null : Date.now() }));
       botHoldUntil = Date.now() + 15000; // friends' phones reconnect on their own; don't play for them yet
       setTimeout(hostWatch, 15100);
       mySeat = members.findIndex((m) => m.cid === myCid);
@@ -1663,6 +1852,7 @@
     mySeat = 0;
     lobbyTarget = 200;
     showLobby();
+    saveLobby();
   }
 
   async function joinRoom(code) {
@@ -1675,28 +1865,63 @@
     mode = 'guest';
     game = null;
     lobbyData = null;
-    try {
-      await Net.join(code);
-    } catch (e) {
-      if (epoch !== netEpoch) return;
-      mode = 'local';
-      setNetBusy(false);
-      toast(netError(e) || `No room found with code <b>${esc(code)}</b>`, 3200);
-      return;
+    // The room isn't answering: the host may have switched apps to send the invite. Keep looking
+    // for a while (with a clock and a Cancel button) and ask the server to alert the host.
+    const started = Date.now();
+    let pinged = null;
+    for (;;) {
+      try {
+        await Net.join(code);
+        break;
+      } catch (e) {
+        if (epoch !== netEpoch) return;
+        if (e && e.message === 'no-room' && Date.now() - started < 90000) {
+          if (pinged === null) { pinged = false; pingHost(code).then((ok) => { pinged = ok; }); }
+          joinStatus(code, started, () => pinged);
+          await new Promise((r) => setTimeout(r, 2500));
+          if (epoch !== netEpoch) return;
+          continue;
+        }
+        mode = 'local';
+        setNetBusy(false);
+        joinStatus(null);
+        toast(netError(e) || (pinged !== null ? `Room <b>${esc(code)}</b> didn't answer. Ask the host to open the game, then try again.` : `No room found with code <b>${esc(code)}</b>`), 4000);
+        return;
+      }
     }
     if (epoch !== netEpoch) return;
+    joinStatus(null);
     setNetBusy(false);
     store.set(ROOM, { code, when: Date.now() });
     if (!game && !$('#lobby').classList.contains('active')) showLobby();
   }
 
+  // "Looking for room ABCD… 0:12" under the Join button while the room isn't answering.
+  let joinTick = null;
+  function joinStatus(code, started, pinged) {
+    clearInterval(joinTick);
+    const el = $('#joinStatus');
+    if (!code) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    const paint = () => {
+      const p = pinged();
+      el.innerHTML = `<span>Looking for room <b>${esc(code)}</b>… <b class="clk">${clock(Date.now() - started)}</b></span>`
+        + `<small>${p ? "The host's phone got a notification to open the game." : 'If the host switched apps, ask them to open the game again.'}</small>`
+        + '<button class="btn link" id="joinCancel" type="button">Cancel</button>';
+      $('#joinCancel').onclick = () => { ++netEpoch; Net.leave(); mode = 'local'; setNetBusy(false); joinStatus(null); };
+    };
+    paint();
+    el.classList.remove('hidden');
+    joinTick = setInterval(paint, 1000);
+  }
+
   // silent: the room ended on the other side, just tidy up.
   function leaveRoom(silent) {
     const was = mode;
-    if (was === 'host') { Net.broadcast({ t: 'end' }); store.del(HOSTED); }
-    if (was === 'guest') store.del(ROOM);
+    if (was === 'host') { Net.broadcast({ t: 'end' }); store.del(HOSTED); pushForget(Net.code); }
+    if (was === 'guest') { store.del(ROOM); if (!silent) Net.send({ t: 'bye' }); }
+    alertsOn = false;
     const epoch = netEpoch;
-    setTimeout(() => { if (epoch === netEpoch) Net.leave(); }, was === 'host' && !silent ? 400 : 0);
+    setTimeout(() => { if (epoch === netEpoch) Net.leave(); }, !silent ? 400 : 0);
     mode = 'local';
     game = null;
     members = [];
@@ -1790,8 +2015,12 @@
     const room = store.get(ROOM);
     let html = '';
     const hostOk = hosted && hosted.state && hosted.state.phase !== 'over' && hosted.members[0] && hosted.members[0].cid === myCid;
+    const lobbyOk = hosted && hosted.lobby && Date.now() - hosted.when < 2 * 3600e3;
     const roomOk = room && Date.now() - room.when < 12 * 3600e3;
-    if (hostOk && !(roomOk && room.when > hosted.when)) {
+    if (lobbyOk && !(roomOk && room.when > hosted.when)) {
+      html = `<span class="rs-txt"><span class="rs-title">Reopen room ${esc(hosted.code)}</span><span class="rs-sub">Your friends can still join with this code</span></span>`;
+      btn.onclick = () => needOnlyOnline(() => createRoom(hosted));
+    } else if (hostOk && !(roomOk && room.when > hosted.when)) {
       const who = hosted.members.map((m, i) => `<b style="color:${pc(i)}">${esc(m.name)}</b>`).join(' · ');
       html = `<span class="rs-txt"><span class="rs-title">Reopen room ${esc(hosted.code)}</span><span class="rs-sub">Round ${hosted.state.round} · you're the host</span><span class="rs-who">${who}</span></span>`;
       btn.onclick = () => needOnlyOnline(() => createRoom(hosted));
@@ -1836,6 +2065,12 @@
       store.set(PREFS, prefs);
       lobbyChanged();
     });
+    // Opened from a "friend wants to join" notification: reopen your room straight away.
+    if (/[?&]reopen\b/.test(location.search)) {
+      history.replaceState(null, '', location.pathname + (debug ? '?debug' : ''));
+      const hosted = store.get(HOSTED);
+      if (hosted && hosted.members && hosted.members[0] && hosted.members[0].cid === myCid) { prefs.mode = 'online'; setTimeout(() => createRoom(hosted), 0); }
+    }
     // Opened from an invite link: fill in the code and point at the Join button.
     const m = /[?&]room=([A-Za-z]{4})\b/.exec(location.search);
     if (m) {
@@ -1976,6 +2211,7 @@
     // Load any game state straight onto the table (for layout checks).
     window.__load = (state) => { mode = 'local'; mySeat = null; game = Game.load(state); lastTurnP = null; closeModal(); showScreen('table'); settle(); };
     window.__summary = () => showSummary();
+    window.__state = () => (game ? JSON.parse(JSON.stringify(game.s)) : null);
     window.__picker = (action) => { const s = game.s; showTarget({ p: 0, action, card: { kind: action }, options: s.players.map((_, i) => i) }); };
     window.__shuffle = () => {
       // Demo with a realistic size: every card that isn't on the table right now.

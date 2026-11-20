@@ -702,7 +702,18 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .ios-share { width: 18px; height: 18px; vertical-align: -3px; color: var(--brand); }
 
 .tag-s.bot { background: #6a5cf0; }
+.tag-s.away { background: #8a9aab; }
 .tag-s.rejoin { background: var(--gold); color: #3a2a00; }
+
+/* ---------- joining: "looking for room" status, join alerts ---------- */
+.join-status { margin-top: 10px; padding: 10px 12px; border-radius: 14px; background: #eef4fa; text-align: center; font-size: 14px; font-weight: 600; color: var(--ink); }
+.join-status small { display: block; margin-top: 3px; font-weight: 500; color: var(--ink2); font-size: 13px; }
+.join-status .clk { font-variant-numeric: tabular-nums; }
+.join-status .btn.link { margin-top: 4px; padding: 4px 10px; font-size: 14px; }
+.lb-alerts { flex: none; text-align: center; margin: -8px 0 -4px; font-size: 14px; font-weight: 600; color: var(--ink2); }
+.lb-alerts:empty { display: none; }
+.lb-alerts .btn.link { font-size: 15px; padding: 6px 10px; }
+.lb-alert-tip { font-weight: 500; font-size: 13px; }
 
 /* ---------- target picker ---------- */
 .seg button.custom { min-width: 76px; }
