@@ -725,8 +725,8 @@
       chill: () => play(() => run([7, 5, 6], { vol: 0.045, gap: 0.09, dur: 0.9, oct: 1 })),
       hat: () => play(() => [0, 1, 2].forEach((k) => tone(SCALE[2 + k * 2], 0.35, { vol: 0.06, at: k * 0.13, bell: true }))),
       shuffle: () => play(() => { for (let k = 0; k < 6; k++) air(0.12, { vol: 0.03, at: k * 0.09, freq: 1200 + k * 120 }); }),
-      // "Gentle lift": a soft note that swells in and lifts slightly as the turn changes.
-      turn: () => { play(() => tone(SCALE[2], 0.5, { vol: 0.04, attack: 0.15, glide: 1.06, dry: true })); buzz(20); },
+      // "Gentle lift", kept very subtle: a quiet note that slowly swells in and barely lifts.
+      turn: () => { play(() => tone(SCALE[2], 0.55, { vol: 0.022, attack: 0.22, glide: 1.04, dry: true })); buzz(15); },
       win: () => { play(() => { run([0, 2, 4, 7], { vol: 0.08, gap: 0.16, dur: 1.4 }); tone(SCALE[0] / 2, 1.6, { vol: 0.05, at: 0.48, attack: 0.1 }); }); buzz([50, 70, 50, 70, 120]); },
       join: () => { play(() => run([2, 4, 5], { vol: 0.06, gap: 0.12, dur: 0.8 })); buzz([40, 50, 40]); },
     };
