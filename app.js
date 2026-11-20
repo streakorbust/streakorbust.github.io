@@ -593,68 +593,114 @@
   // Short sounds made on the fly (no audio files to download) and a light buzz on phones that
   // support it. The speaker button on the table turns both off; this phone remembers the choice.
   const sfx = (() => {
+    // Soft, soothing sounds: rounded tones with slow fades (nothing clicks or snaps), notes from a
+    // five-note scale so everything sounds good together, the harsh top end filtered off, and a
+    // touch of warm echo. Even the bad moments (a bust) are a gentle low "whoomp", not a buzz.
     let ctx = null;
+    let out = null; // everything plays through here: soft filter + gentle echo
     const on = () => prefs.sound !== false;
+    const SCALE = [392.0, 440.0, 523.25, 587.33, 659.25, 783.99, 880.0, 1046.5]; // G A C D E G A C
     function ac() {
-      try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch (e) { ctx = null; }
+      try {
+        if (!ctx) {
+          ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const master = ctx.createGain();
+          master.gain.value = 0.55;
+          const soft = ctx.createBiquadFilter();
+          soft.type = 'lowpass';
+          soft.frequency.value = 3200;
+          soft.Q.value = 0.5;
+          const echo = ctx.createDelay(1);
+          echo.delayTime.value = 0.19;
+          const fb = ctx.createGain();
+          fb.gain.value = 0.22;
+          const wet = ctx.createGain();
+          wet.gain.value = 0.16;
+          const echoSoft = ctx.createBiquadFilter();
+          echoSoft.type = 'lowpass';
+          echoSoft.frequency.value = 1800;
+          master.connect(soft).connect(ctx.destination);
+          soft.connect(echo);
+          echo.connect(echoSoft).connect(fb).connect(echo);
+          echoSoft.connect(wet).connect(ctx.destination);
+          out = master;
+        }
+        if (ctx.state === 'suspended') ctx.resume();
+      } catch (e) { ctx = null; }
       return ctx;
     }
     document.addEventListener('pointerdown', () => { if (on()) ac(); }, { passive: true });
-    function tone(freq, dur = 0.12, o = {}) {
+    // A rounded tone: a slow-ish fade in, a long gentle fade out, and an optional soft overtone
+    // (bell) or a gentle pitch glide.
+    function tone(freq, dur = 0.35, o = {}) {
       const c = ctx;
       if (!c) return;
       const at = c.currentTime + (o.at || 0);
-      const osc = c.createOscillator();
+      const vol = o.vol || 0.1;
+      const attack = o.attack || 0.025;
       const g = c.createGain();
-      osc.type = o.type || 'sine';
-      osc.frequency.setValueAtTime(freq, at);
-      if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * o.slide), at + dur);
       g.gain.setValueAtTime(0.0001, at);
-      g.gain.exponentialRampToValueAtTime(o.vol || 0.12, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(vol, at + attack);
       g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
-      osc.connect(g).connect(c.destination);
-      osc.start(at);
-      osc.stop(at + dur + 0.02);
+      g.connect(out);
+      const parts = o.bell ? [[1, 1], [2, 0.18], [3, 0.05]] : [[1, 1]];
+      for (const [mult, level] of parts) {
+        const osc = c.createOscillator();
+        osc.type = o.type || 'sine';
+        osc.frequency.setValueAtTime(freq * mult, at);
+        if (o.glide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * mult * o.glide), at + dur);
+        const pg = c.createGain();
+        pg.gain.value = level;
+        osc.connect(pg).connect(g);
+        osc.start(at);
+        osc.stop(at + dur + 0.05);
+      }
     }
-    function noise(dur = 0.08, o = {}) {
+    // A soft breath of air (card sliding, shuffling): quiet, filtered, with gentle edges.
+    function air(dur = 0.12, o = {}) {
       const c = ctx;
       if (!c) return;
       const at = c.currentTime + (o.at || 0);
       const buf = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate);
       const d = buf.getChannelData(0);
-      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       const src = c.createBufferSource();
       src.buffer = buf;
       const f = c.createBiquadFilter();
-      f.type = 'highpass';
-      f.frequency.value = o.hp || 1500;
+      f.type = 'bandpass';
+      f.frequency.value = o.freq || 1400;
+      f.Q.value = 0.8;
       const g = c.createGain();
-      g.gain.value = o.vol || 0.1;
-      src.connect(f).connect(g).connect(c.destination);
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(o.vol || 0.05, at + dur * 0.35);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      src.connect(f).connect(g).connect(out);
       src.start(at);
+      src.stop(at + dur + 0.02);
     }
     const play = (fn) => { if (!on() || !ac()) return; try { fn(); } catch (e) { /* no sound */ } };
     const buzz = (pattern) => {
       if (!on() || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
       try { navigator.vibrate(pattern); } catch (e) { /* no buzz */ }
     };
-    const notes = (list, o = {}) => list.forEach((f, k) => tone(f, o.dur || 0.22, { type: o.type || 'triangle', vol: o.vol || 0.11, at: k * (o.gap || 0.08) }));
+    // A little run of notes from the scale, each ringing softly into the next.
+    const run = (steps, o = {}) => steps.forEach((k, i) => tone(SCALE[k] * (o.oct || 1), o.dur || 0.6, { vol: o.vol || 0.08, at: i * (o.gap || 0.11), bell: true, attack: 0.02 }));
     return {
-      flip: () => play(() => noise(0.07, { vol: 0.09, hp: 2600 })),
-      // Each new number rings a little higher than the last, so a full hand sounds tense.
-      place: (n) => play(() => tone(392 * Math.pow(2, (Math.min(n, 7) * 2) / 12), 0.12, { type: 'triangle', vol: 0.12 })),
-      bonus: () => play(() => notes([880, 1175], { dur: 0.12, gap: 0.07 })),
-      tense: () => { play(() => { tone(62, 0.2, { vol: 0.28 }); tone(62, 0.2, { vol: 0.22, at: 0.3 }); }); buzz([25, 280, 25]); },
-      bust: () => { play(() => { tone(190, 0.5, { type: 'sawtooth', vol: 0.11, slide: 0.33 }); noise(0.3, { vol: 0.14, hp: 180 }); }); buzz([90, 60, 170]); },
-      saved: () => { play(() => notes([784, 988, 1319], { gap: 0.07 })); buzz([40, 40, 40]); },
-      sweep: () => { play(() => notes([523, 659, 784, 1047, 1319], { dur: 0.32 })); buzz([60, 50, 60, 50, 140]); },
-      bank: () => play(() => { tone(988, 0.08, { type: 'square', vol: 0.045 }); tone(1319, 0.22, { type: 'square', vol: 0.045, at: 0.07 }); }),
-      chill: () => play(() => notes([1568, 2093, 1760], { type: 'sine', vol: 0.07, gap: 0.06, dur: 0.28 })),
-      hat: () => play(() => [0, 1, 2].forEach((k) => noise(0.05, { vol: 0.11, at: k * 0.12, hp: 3200 }))),
-      shuffle: () => play(() => { for (let k = 0; k < 9; k++) noise(0.04, { vol: 0.06, at: k * 0.06, hp: 2200 }); }),
-      turn: () => { play(() => tone(660, 0.12, { vol: 0.08 })); buzz(30); },
-      win: () => { play(() => notes([523, 659, 784, 1047], { dur: 0.3, gap: 0.13 })); buzz([80, 60, 80, 60, 220]); },
-      join: () => { play(() => notes([660, 880], { type: 'sine', dur: 0.28, gap: 0.13 })); buzz([60, 50, 60]); },
+      flip: () => play(() => air(0.14, { vol: 0.035, freq: 1600 })),
+      // Each new number is the next note up the scale, so a growing hand climbs gently.
+      place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
+      bonus: () => play(() => run([4, 6], { vol: 0.06, gap: 0.09, dur: 0.5 })),
+      tense: () => { play(() => { tone(98, 0.5, { vol: 0.09, attack: 0.06 }); tone(98, 0.5, { vol: 0.07, attack: 0.06, at: 0.42 }); }); buzz([20, 300, 20]); },
+      bust: () => { play(() => { tone(220, 0.7, { vol: 0.09, glide: 0.5, attack: 0.03 }); tone(165, 0.8, { vol: 0.06, glide: 0.5, attack: 0.05, at: 0.05 }); }); buzz([60, 80, 90]); },
+      saved: () => { play(() => run([3, 5, 7], { vol: 0.07, gap: 0.1, dur: 0.8 })); buzz([30, 40, 30]); },
+      sweep: () => { play(() => run([0, 2, 4, 5, 7], { vol: 0.08, gap: 0.12, dur: 1.1 })); buzz([40, 60, 40, 60, 90]); },
+      bank: () => play(() => run([2, 4], { vol: 0.065, gap: 0.09, dur: 0.7 })),
+      chill: () => play(() => run([7, 5, 6], { vol: 0.045, gap: 0.09, dur: 0.9, oct: 1 })),
+      hat: () => play(() => [0, 1, 2].forEach((k) => tone(SCALE[2 + k * 2], 0.35, { vol: 0.06, at: k * 0.13, bell: true }))),
+      shuffle: () => play(() => { for (let k = 0; k < 6; k++) air(0.12, { vol: 0.03, at: k * 0.09, freq: 1200 + k * 120 }); }),
+      turn: () => { play(() => tone(SCALE[4], 0.45, { vol: 0.05, bell: true })); buzz(20); },
+      win: () => { play(() => { run([0, 2, 4, 7], { vol: 0.08, gap: 0.16, dur: 1.4 }); tone(SCALE[0] / 2, 1.6, { vol: 0.05, at: 0.48, attack: 0.1 }); }); buzz([50, 70, 50, 70, 120]); },
+      join: () => { play(() => run([2, 4, 5], { vol: 0.06, gap: 0.12, dur: 0.8 })); buzz([40, 50, 40]); },
     };
   })();
   function paintSound() {
@@ -2657,6 +2703,7 @@
     window.__summary = () => showSummary();
     window.__state = () => (game ? JSON.parse(JSON.stringify(game.s)) : null);
     window.__winCard = async () => URL.createObjectURL(await winCard(game.s));
+    window.__sfx = sfx;
     window.__picker = (action) => { const s = game.s; showTarget({ p: 0, action, card: { kind: action }, options: s.players.map((_, i) => i) }); };
     window.__shuffle = () => {
       // Demo with a realistic size: every card that isn't on the table right now.
