@@ -677,10 +677,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 
 /* ---------- away players: countdown / waiting-for-host note ---------- */
 #awayNote { position: fixed; left: 50%; top: calc(var(--safe-t) + 54px); transform: translate(-50%, -8px); z-index: 31; max-width: 92vw; padding: 9px 16px;
-  border-radius: 999px; background: var(--ink); color: #fff; box-shadow: var(--shadow-lg); font-size: 14px; font-weight: 600; text-align: center;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+  border-radius: 18px; background: var(--ink); color: #fff; box-shadow: var(--shadow-lg); font-size: 14px; font-weight: 600; text-align: center;
+  width: max-content; line-height: 1.35; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
 #awayNote.show { opacity: 1; transform: translate(-50%, 0); }
 #awayNote b { font-variant-numeric: tabular-nums; }
+#lbConn b { font-variant-numeric: tabular-nums; }
+#crashNote { position: fixed; left: 12px; right: 12px; bottom: calc(var(--safe-b, 0px) + 16px); z-index: 99; display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 16px; background: var(--ink); color: #fff; box-shadow: var(--shadow-lg); font-weight: 600; font-size: 15px; }
+#crashNote span { flex: 1; }
+#crashNote small { display: block; font-weight: 500; opacity: .75; font-size: 13px; }
+#crashNote .btn { flex: none; width: auto; padding: 10px 18px; margin: 0; }
 .tag-s.sitout { background: #9fb3c4; }
 
 /* ---------- install app ---------- */

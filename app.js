@@ -296,6 +296,21 @@
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => el.classList.remove('show'), ms);
   }
+
+  // Safety net: if the game's own code ever breaks, say so and offer a reload instead of leaving a
+  // frozen screen. Games are saved after every move, so a reload picks up right where it left off.
+  let crashShown = false;
+  function crashed(where) {
+    if (crashShown || !/\/(app|engine|net)\.js/.test(String(where || ''))) return;
+    crashShown = true;
+    const el = document.createElement('div');
+    el.id = 'crashNote';
+    el.innerHTML = '<span>Something went wrong on this screen.<small>Your game is saved.</small></span><button class="btn pink" type="button">Reload</button>';
+    el.querySelector('button').onclick = () => location.reload();
+    document.body.appendChild(el);
+  }
+  window.addEventListener('error', (e) => crashed(e.filename || (e.error && e.error.stack)));
+  window.addEventListener('unhandledrejection', (e) => crashed(e.reason && e.reason.stack));
   function banner(title, sub, color) {
     const el = $('#banner');
     el.style.setProperty('--pc', color);
@@ -1291,18 +1306,73 @@
     }, BOT_DELAY_MS);
   }
 
-  // Shown on guests while the host's phone is unreachable.
-  function showCountdown(p) {
-    const el = $('#awayNote');
-    if (p == null || !game) { el.classList.remove('show'); return; }
-    el.innerHTML = 'Waiting for the host to come back…';
-    el.classList.add('show');
+  // ---------- connection notes ----------
+  // Nobody should stare at a frozen screen. Whenever the room link is down, a note at the top says
+  // what's going on, with a running clock. After 2 minutes, guests are offered a way out.
+  let lostSince = null; // guest: when the link to the host dropped
+  let lostAsked = false; // guest: already asked "keep waiting or leave?"
+  let hostOffSince = null; // host: when this phone lost its own connection
+  const clock = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  function hostLabel() {
+    const p0 = game ? game.s.players[0] : lobbyData && lobbyData.members[0];
+    return p0 && p0.name ? `<b>${esc(p0.name)}</b>` : 'The host';
   }
+  function showCountdown(p) {
+    if (p == null) { lostSince = null; lostAsked = false; } else if (!lostSince) lostSince = Date.now();
+    paintConn();
+  }
+  function connText() {
+    const offline = navigator.onLine === false;
+    if (mode === 'guest' && lostSince) {
+      const t = clock(Date.now() - lostSince);
+      return offline ? `You're offline. Reconnecting when your signal is back… <b>${t}</b>`
+        : `${hostLabel()} got disconnected. Waiting for them to rejoin… <b>${t}</b>`;
+    }
+    if (mode === 'host' && hostOffSince && Date.now() - hostOffSince > 1500) {
+      return `You lost your connection. Reconnecting… <b>${clock(Date.now() - hostOffSince)}</b>`;
+    }
+    return '';
+  }
+  function paintConn() {
+    const html = connText();
+    const el = $('#awayNote');
+    el.innerHTML = html;
+    el.classList.toggle('show', !!html && $('#table').classList.contains('active'));
+    const lb = $('#lbConn');
+    if (lb) lb.innerHTML = html;
+  }
+  function askKeepWaiting() {
+    openModal(`<h2>Still waiting</h2><p>${hostLabel()} has been disconnected for 2 minutes. When they're back, the game picks up right where it left off. You can keep waiting or leave the room.</p>
+      <div class="mbtns"><button class="btn pink" id="mWait">Keep waiting</button><button class="btn ghost" id="mLeaveRoom">Leave room</button></div>`, (m) => {
+      m.querySelector('#mWait').onclick = backToTable;
+      m.querySelector('#mLeaveRoom').onclick = () => leaveRoom();
+    }, '', backToTable);
+  }
+  // Host's phone came back online: friends' phones reconnect on their own within a few seconds,
+  // so don't start the bot for them, and restart their away clocks from now.
+  function hostBack() {
+    botHoldUntil = Date.now() + 15000;
+    members.forEach((m) => { if (!m.on && m.awaySince) m.awaySince = Date.now(); });
+    toast("You're back online. Friends are reconnecting…", 2500);
+  }
+  setInterval(() => {
+    if (mode === 'host') {
+      const inRoom = $('#lobby').classList.contains('active') || $('#table').classList.contains('active');
+      const off = inRoom && (!Net.connected || navigator.onLine === false);
+      if (off && !hostOffSince) hostOffSince = Date.now();
+      else if (!off && hostOffSince) { const was = Date.now() - hostOffSince; hostOffSince = null; if (was > 1500) hostBack(); }
+    } else hostOffSince = null;
+    if (mode === 'guest' && lostSince && !lostAsked && Date.now() - lostSince > 120000 && $('#modalWrap').classList.contains('hidden')) {
+      lostAsked = true;
+      askKeepWaiting();
+    }
+    paintConn();
+  }, 1000);
   // Host: every few seconds, sit out anyone who's been gone too long. The bot stops right away:
   // their hand for this round is set aside (so their total stays frozen) and they get no more turns
   // until they come back. If the bot is in the middle of a move for them, it finishes that first.
   setInterval(() => {
-    if (mode !== 'host' || !game) return;
+    if (mode !== 'host' || !game || hostOffSince) return; // while the host is offline, nobody's clock runs
     const s = game.s;
     let changed = false;
     members.forEach((m, i) => {
@@ -1739,13 +1809,14 @@
     Net.on('open', () => {
       if (mode !== 'guest') return;
       Net.send({ t: 'hello', cid: myCid, name: prefs.myName });
-      $('#lbConn').textContent = '';
+      if (lostSince && Date.now() - lostSince > 3000) toast(`Reconnected. You're back in the game.`, 2200);
+      if (lostAsked && !$('#modalWrap').classList.contains('hidden') && $('#modal').querySelector('#mWait')) backToTable();
       showCountdown(null);
     });
     Net.on('lost', () => {
       if (mode !== 'guest') return;
-      $('#lbConn').textContent = 'Reconnecting…';
-      if (game) { showCountdown(-1); if (!busy) render(game.s, focusP); } else toast('Lost the connection. Reconnecting…', 3000);
+      showCountdown(-1);
+      if (game && !busy) render(game.s, focusP);
     });
     Net.on('error', () => { if (mode === 'host') toast('Room connection hiccup. Reconnecting…', 2500); });
 
