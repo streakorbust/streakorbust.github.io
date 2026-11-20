@@ -2172,7 +2172,7 @@
     const room = store.get(ROOM);
     let html = '';
     const hostOk = hosted && hosted.state && hosted.state.phase !== 'over' && hostedByMe(hosted);
-    const lobbyOk = hosted && hosted.lobby && Date.now() - hosted.when < 2 * 3600e3;
+    const lobbyOk = hosted && hosted.lobby && Date.now() - hosted.when < 12 * 3600e3;
     const roomOk = room && Date.now() - room.when < 12 * 3600e3;
     if (lobbyOk && !(roomOk && room.when > hosted.when)) {
       html = `<span class="rs-txt"><span class="rs-title">Reopen room ${esc(hosted.code)}</span><span class="rs-sub">Your friends can still join with this code</span></span>`;
