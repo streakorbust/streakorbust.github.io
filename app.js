@@ -690,13 +690,13 @@
       // Each new number is the next note up the scale, so a growing hand climbs gently.
       place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
       bonus: () => play(() => run([4, 6], { vol: 0.06, gap: 0.09, dur: 0.5 })),
-      // A soft "lub-dub" heartbeat pitched where phone and laptop speakers can play it, over a
-      // gentle rising swell of air.
+      // A soft "lub-dub" heartbeat, pitched high enough (around 390 Hz) that small phone and
+      // laptop speakers can play it, over a gentle swell of air.
       tense: () => {
         play(() => {
-          tone(196, 0.3, { vol: 0.12, bell: true, glide: 0.82, attack: 0.012 });
-          tone(174.6, 0.34, { vol: 0.09, bell: true, glide: 0.82, attack: 0.012, at: 0.2 });
-          air(0.9, { vol: 0.025, freq: 900 });
+          tone(392, 0.34, { vol: 0.095, bell: true, glide: 0.85, attack: 0.012 });
+          tone(349.2, 0.38, { vol: 0.08, bell: true, glide: 0.85, attack: 0.012, at: 0.24 });
+          air(0.9, { vol: 0.03, freq: 1000 });
         });
         buzz([20, 180, 20]);
       },
