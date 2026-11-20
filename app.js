@@ -690,7 +690,16 @@
       // Each new number is the next note up the scale, so a growing hand climbs gently.
       place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
       bonus: () => play(() => run([4, 6], { vol: 0.06, gap: 0.09, dur: 0.5 })),
-      tense: () => { play(() => { tone(98, 0.5, { vol: 0.09, attack: 0.06 }); tone(98, 0.5, { vol: 0.07, attack: 0.06, at: 0.42 }); }); buzz([20, 300, 20]); },
+      // A soft "lub-dub" heartbeat pitched where phone and laptop speakers can play it, over a
+      // gentle rising swell of air.
+      tense: () => {
+        play(() => {
+          tone(196, 0.3, { vol: 0.12, bell: true, glide: 0.82, attack: 0.012 });
+          tone(174.6, 0.34, { vol: 0.09, bell: true, glide: 0.82, attack: 0.012, at: 0.2 });
+          air(0.9, { vol: 0.025, freq: 900 });
+        });
+        buzz([20, 180, 20]);
+      },
       bust: () => { play(() => { tone(220, 0.7, { vol: 0.09, glide: 0.5, attack: 0.03 }); tone(165, 0.8, { vol: 0.06, glide: 0.5, attack: 0.05, at: 0.05 }); }); buzz([60, 80, 90]); },
       saved: () => { play(() => run([3, 5, 7], { vol: 0.07, gap: 0.1, dur: 0.8 })); buzz([30, 40, 30]); },
       sweep: () => { play(() => run([0, 2, 4, 5, 7], { vol: 0.08, gap: 0.12, dur: 1.1 })); buzz([40, 60, 40, 60, 90]); },
