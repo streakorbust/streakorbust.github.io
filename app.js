@@ -1007,10 +1007,10 @@
       <li>Out of cards? The discards get shuffled into a new deck.</li></ul>
 
     <h3>Playing online</h3><ul>
-      <li><b>Lost your connection?</b> Everyone waits 30 seconds for you. After that, a bot plays your turns so the game keeps moving.</li>
-      <li><b>Gone a full minute?</b> The bot stops, and you sit out with your score frozen.</li>
+      <li><b>Lost your connection?</b> Everyone waits 15 seconds for you. After that, a bot plays your turns so the game keeps moving.</li>
+      <li><b>Gone a full minute?</b> The bot finishes the round for you, then you sit out with your score frozen.</li>
       <li><b>Tap Rejoin</b> any time to jump back in on your next turn.</li>
-      <li><b>Host dropped?</b> They get the same 30 seconds. Then the next player's phone takes over, and the game keeps going.</li>
+      <li><b>Host dropped?</b> They get the same 15 seconds. Then the next player's phone takes over, and the game keeps going.</li>
       <li><b>Tapped Leave?</b> You're out right away, with no bot. Come back any time with the room code.</li>
       <li>It takes at least 2 players. If everyone else is out, the game pauses until someone's back.</li></ul>
   </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
@@ -1252,12 +1252,13 @@
   }
 
   // ---------- away players: a bot plays for them ----------
-  // Someone's phone drops: they're tagged AWAY and everyone gets 30 seconds to see whether they
-  // come right back. Still gone after 30 seconds: the host's phone plays their turns with a simple
-  // bot (tagged BOT). Gone a full minute: the bot stops and they sit out with their score frozen.
+  // Someone's phone drops: they're tagged AWAY and everyone gets 15 seconds to see whether they
+  // come right back. Still gone after 15 seconds: the host's phone plays their turns with a simple
+  // bot (tagged BOT). Gone a full minute: the bot finishes the round, then they sit out with their
+  // score frozen.
   // Whenever they reconnect they're tagged REJOINING and take over at the start of their next turn.
   const BOT_DELAY_MS = 900;
-  const BOT_AFTER_MS = 30000;
+  const BOT_AFTER_MS = 15000;
   const SIT_OUT_MS = 60000;
   const HOST_WAIT_MS = 90000; // if the game still can't be reached after this long, offer to leave
   let botTimer = null;
@@ -1317,7 +1318,7 @@
     }
     const key = a && a.p != null && (a.type === 'decide' || a.type === 'target') && botRuns(a.p, a)
       ? `${game.s.round}:${a.type}:${a.p}:${game.s.deck.length}:${game.s.discard.length}` : null;
-    // Their turn, but they've only just dropped: check again the moment the 30 seconds are up.
+    // Their turn, but they've only just dropped: check again the moment the 15 seconds are up.
     clearTimeout(graceTimer);
     const am = a && a.p != null ? members[a.p] : null;
     if (!key && am && !am.on && am.awaySince && (a.type === 'decide' || a.type === 'target')) {
@@ -1340,7 +1341,8 @@
 
   // ---------- connection notes ----------
   // Nobody should stare at a frozen screen. Whenever the room link is down, a note at the top says
-  // what's going on, with a running clock. After 30 seconds, guests are offered a way out.
+  // what's going on, with a running clock. If the game can't be reached for a while, guests are
+  // offered a way out.
   let lostSince = null; // guest: when the link to the host dropped
   let lostAsked = false; // guest: already asked "keep waiting or leave?"
   let hostOffSince = null; // host: when this phone lost its own connection
@@ -1489,7 +1491,7 @@
   const andList = (xs) => (xs.length < 3 ? xs.join(' and ') : `${xs.slice(0, -1).join(', ')}, and ${xs[xs.length - 1]}`);
   function soloCheck() {
     if (game.s.phase === 'over') return;
-    const inGame = game.s.players.filter((pl) => !pl.out).length;
+    const inGame = game.s.players.filter((pl) => !(pl.out && pl.status === 'sitout')).length;
     if (inGame >= 2) {
       if (soloShown) { soloShown = false; if ($('#modal').querySelector('#mSoloEnd')) closeModal(); if (!busy) settle(); toast('Back to the game!', 1800); }
       return;
@@ -1497,7 +1499,7 @@
     if (soloShown && $('#modal').querySelector('#mSoloEnd')) return; // already showing
     if (busy || !$('#table').classList.contains('active')) return;
     soloShown = true;
-    const gone = game.s.players.filter((pl, i) => i !== mySeat && pl.out).map((pl) => `<b>${esc(pl.name)}</b>`);
+    const gone = game.s.players.filter((pl, i) => i !== mySeat && pl.out && pl.status === 'sitout').map((pl) => `<b>${esc(pl.name)}</b>`);
     openModal(`<h2>Waiting for players</h2><p>${andList(gone)} ${gone.length > 1 ? 'are' : 'is'} out of the game, and you need at least 2 players. The game is paused until someone's back. They can rejoin with room code <b>${esc(Net.code || '')}</b>.</p>
       <div class="mbtns"><button class="btn primary" id="mSoloInvite">Invite friends</button><button class="btn ghost" id="mSoloEnd" style="color:var(--bad)">End the game</button></div>`, (m) => {
       m.querySelector('#mSoloInvite').onclick = invite;
@@ -1508,7 +1510,7 @@
   // Host's phone came back online: friends' phones reconnect on their own within a few seconds,
   // so don't start the bot for them, and restart their away clocks from now.
   function hostBack() {
-    botHoldUntil = Date.now() + 15000;
+    botHoldUntil = Date.now() + 8000;
     members.forEach((m) => { if (!m.on && m.awaySince) m.awaySince = Date.now(); });
     toast("You're back online. Friends are reconnecting…", 2500);
   }
@@ -1520,12 +1522,12 @@
       else if (!off && hostOffSince) { const was = Date.now() - hostOffSince; hostOffSince = null; if (was > 1500) hostBack(); }
     } else hostOffSince = null;
     if (mode === 'guest' && lostSince && !takingOver && navigator.onLine !== false && (game || lobbyData)) {
-      // The host has been gone 30 seconds: the next phone in line takes over the game. Phones
+      // The host has been gone 15 seconds: the next phone in line takes over the game. Phones
       // further down the line wait a little longer, in case the first one is gone too.
       const order = successorOrder();
       let rank = order.indexOf(game ? mySeat : myCid);
       if (rank < 0) rank = order.length;
-      if (Date.now() >= Math.max(lostSince + BOT_AFTER_MS + rank * 8000, nextTakeover)) takeOver();
+      if (Date.now() >= Math.max(lostSince + BOT_AFTER_MS + rank * 5000, nextTakeover)) takeOver();
     }
     if (mode === 'guest' && lostSince && !lostAsked && Date.now() - lostSince > HOST_WAIT_MS && $('#modalWrap').classList.contains('hidden')) {
       lostAsked = true;
@@ -1533,16 +1535,16 @@
     }
     if (mode === 'host' && game) soloCheck();
     paintConn();
-    // A dropped player's AWAY tag turns into BOT once their 30 seconds are up.
+    // A dropped player's AWAY tag turns into BOT once their 15 seconds are up.
     if (game && mode !== 'local') {
       const sig = game.s.players.map((_, i) => { const ms = awayMs(i); return ms == null ? '' : ms < BOT_AFTER_MS ? 'a' : 'b'; }).join();
       if (sig !== tagSig) { tagSig = sig; if (!busy && $('#table').classList.contains('active')) render(game.s, focusP); }
     }
   }, 1000);
   let tagSig = '';
-  // Host: every few seconds, sit out anyone who's been gone too long. The bot stops right away:
-  // their hand for this round is set aside (so their total stays frozen) and they get no more turns
-  // until they come back. If the bot is in the middle of a move for them, it finishes that first.
+  // Host: every few seconds, check for anyone who's been gone a minute. The bot finishes the round
+  // they're in, then they sit out (no cards, no turns, total frozen) from the next round until
+  // they come back.
   setInterval(() => {
     if (mode !== 'host' || !game || hostOffSince) return; // while the host is offline, nobody's clock runs
     const s = game.s;
@@ -1550,17 +1552,13 @@
     members.forEach((m, i) => {
       const p = s.players[i];
       if (m.on || !m.awaySince || Date.now() - m.awaySince < SIT_OUT_MS || !p || p.out) return;
-      if (s.awaiting && s.awaiting.p === i) return; // let the bot finish this move; check again shortly
-      p.out = true;
-      if (s.phase === 'play' && p.status === 'active') {
-        s.discard.push(...p.cards, ...p.shields);
-        p.cards = [];
-        p.shields = [];
-        p.status = 'sitout';
-      }
+      p.out = true; // sits out from the next round; the bot keeps playing this one for them
       changed = true;
       if (m.left) return; // they chose to leave; everyone was already told
-      const note = `<b>${esc(m.name)}</b> has been gone a minute, so the bot stops. They sit out until they're back.`;
+      const playing = s.phase === 'play' && p.status === 'active';
+      const note = playing
+        ? `<b>${esc(m.name)}</b> has been gone a minute. The bot finishes this round for them, then they sit out until they're back.`
+        : `<b>${esc(m.name)}</b> has been gone a minute, so they sit out until they're back.`;
       toast(note, 3200);
       members.forEach((x) => { if (x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
     });
@@ -1679,7 +1677,7 @@
     m.totalAtDrop = game.s.players[members.indexOf(m)] ? game.s.players[members.indexOf(m)].total : 0;
     presenceChanged();
     hostWatch();
-    const note = `<b>${esc(m.name)}</b> dropped out. If they're not back in 30 seconds, a bot plays for them.`;
+    const note = `<b>${esc(m.name)}</b> dropped out. If they're not back in 15 seconds, a bot plays for them.`;
     toast(note, 3200);
     members.forEach((x) => { if (x !== m && x.peer && x.on) Net.sendTo(x.peer, { t: 'note', html: note }); });
   }
@@ -1989,8 +1987,8 @@
     }
     if (reopen) {
       members = reopen.members.map((m) => ({ cid: m.cid, name: m.name, peer: null, on: m.cid === myCid, fresh: true, awaySince: m.cid === myCid ? null : Date.now() }));
-      botHoldUntil = Date.now() + 15000; // friends' phones reconnect on their own; don't play for them yet
-      setTimeout(hostWatch, 15100);
+      botHoldUntil = Date.now() + 8000; // friends' phones reconnect on their own; don't play for them yet
+      setTimeout(hostWatch, 8100);
       mySeat = members.findIndex((m) => m.cid === myCid);
       hostSeat = mySeat;
       lobbyTarget = reopen.target;
