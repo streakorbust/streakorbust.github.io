@@ -651,6 +651,16 @@
         if (o.glide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * mult * o.glide), at + dur);
         const pg = c.createGain();
         pg.gain.value = level;
+        if (o.trem) {
+          // A soft tremble: the volume sways gently a few times a second.
+          const lfo = c.createOscillator();
+          lfo.frequency.value = o.trem;
+          const depth = c.createGain();
+          depth.gain.value = level * 0.35;
+          lfo.connect(depth).connect(pg.gain);
+          lfo.start(at);
+          lfo.stop(at + dur + 0.05);
+        }
         osc.connect(pg).connect(g);
         osc.start(at);
         osc.stop(at + dur + 0.05);
@@ -690,13 +700,11 @@
       // Each new number is the next note up the scale, so a growing hand climbs gently.
       place: (n) => play(() => tone(SCALE[Math.max(0, Math.min(n, 8) - 1)], 0.5, { vol: 0.085, bell: true })),
       bonus: () => play(() => run([4, 6], { vol: 0.06, gap: 0.09, dur: 0.5 })),
-      // A soft "lub-dub" heartbeat, pitched high enough (around 390 Hz) that small phone and
-      // laptop speakers can play it, over a gentle swell of air.
+      // "Held breath": a warm, softly trembling chord (G and D) that swells in while the card turns.
       tense: () => {
         play(() => {
-          tone(392, 0.34, { vol: 0.095, bell: true, glide: 0.85, attack: 0.012 });
-          tone(349.2, 0.38, { vol: 0.08, bell: true, glide: 0.85, attack: 0.012, at: 0.24 });
-          air(0.9, { vol: 0.03, freq: 1000 });
+          tone(392, 1.2, { vol: 0.07, attack: 0.45, trem: 6 });
+          tone(587.33, 1.2, { vol: 0.05, attack: 0.5, trem: 6 });
         });
         buzz([20, 180, 20]);
       },
