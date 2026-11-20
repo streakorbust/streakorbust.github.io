@@ -318,10 +318,15 @@
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
   let revealToken = 0;
-  function showReveal(card) {
+  function shake() {
+    const el = $('#stage');
+    el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+    setTimeout(() => el.classList.remove('shake'), 500);
+  }
+  function showReveal(card, tense) {
     const el = $('#reveal');
     revealToken++;
-    el.className = '';
+    el.className = tense ? 'tense' : '';
     el.innerHTML = `<div class="flipper">${cardHTML(card)}<div class="card back"></div></div>`;
   }
   function hideReveal(animate) {
@@ -584,6 +589,115 @@
     layoutSeats();
   }
 
+  // ---------------- sound and buzz ----------------
+  // Short sounds made on the fly (no audio files to download) and a light buzz on phones that
+  // support it. The speaker button on the table turns both off; this phone remembers the choice.
+  const sfx = (() => {
+    let ctx = null;
+    const on = () => prefs.sound !== false;
+    function ac() {
+      try { ctx = ctx || new (window.AudioContext || window.webkitAudioContext)(); if (ctx.state === 'suspended') ctx.resume(); } catch (e) { ctx = null; }
+      return ctx;
+    }
+    document.addEventListener('pointerdown', () => { if (on()) ac(); }, { passive: true });
+    function tone(freq, dur = 0.12, o = {}) {
+      const c = ctx;
+      if (!c) return;
+      const at = c.currentTime + (o.at || 0);
+      const osc = c.createOscillator();
+      const g = c.createGain();
+      osc.type = o.type || 'sine';
+      osc.frequency.setValueAtTime(freq, at);
+      if (o.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(30, freq * o.slide), at + dur);
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(o.vol || 0.12, at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      osc.connect(g).connect(c.destination);
+      osc.start(at);
+      osc.stop(at + dur + 0.02);
+    }
+    function noise(dur = 0.08, o = {}) {
+      const c = ctx;
+      if (!c) return;
+      const at = c.currentTime + (o.at || 0);
+      const buf = c.createBuffer(1, Math.ceil(c.sampleRate * dur), c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      const f = c.createBiquadFilter();
+      f.type = 'highpass';
+      f.frequency.value = o.hp || 1500;
+      const g = c.createGain();
+      g.gain.value = o.vol || 0.1;
+      src.connect(f).connect(g).connect(c.destination);
+      src.start(at);
+    }
+    const play = (fn) => { if (!on() || !ac()) return; try { fn(); } catch (e) { /* no sound */ } };
+    const buzz = (pattern) => {
+      if (!on() || !navigator.vibrate || (navigator.userActivation && !navigator.userActivation.hasBeenActive)) return;
+      try { navigator.vibrate(pattern); } catch (e) { /* no buzz */ }
+    };
+    const notes = (list, o = {}) => list.forEach((f, k) => tone(f, o.dur || 0.22, { type: o.type || 'triangle', vol: o.vol || 0.11, at: k * (o.gap || 0.08) }));
+    return {
+      flip: () => play(() => noise(0.07, { vol: 0.09, hp: 2600 })),
+      // Each new number rings a little higher than the last, so a full hand sounds tense.
+      place: (n) => play(() => tone(392 * Math.pow(2, (Math.min(n, 7) * 2) / 12), 0.12, { type: 'triangle', vol: 0.12 })),
+      bonus: () => play(() => notes([880, 1175], { dur: 0.12, gap: 0.07 })),
+      tense: () => { play(() => { tone(62, 0.2, { vol: 0.28 }); tone(62, 0.2, { vol: 0.22, at: 0.3 }); }); buzz([25, 280, 25]); },
+      bust: () => { play(() => { tone(190, 0.5, { type: 'sawtooth', vol: 0.11, slide: 0.33 }); noise(0.3, { vol: 0.14, hp: 180 }); }); buzz([90, 60, 170]); },
+      saved: () => { play(() => notes([784, 988, 1319], { gap: 0.07 })); buzz([40, 40, 40]); },
+      sweep: () => { play(() => notes([523, 659, 784, 1047, 1319], { dur: 0.32 })); buzz([60, 50, 60, 50, 140]); },
+      bank: () => play(() => { tone(988, 0.08, { type: 'square', vol: 0.045 }); tone(1319, 0.22, { type: 'square', vol: 0.045, at: 0.07 }); }),
+      chill: () => play(() => notes([1568, 2093, 1760], { type: 'sine', vol: 0.07, gap: 0.06, dur: 0.28 })),
+      hat: () => play(() => [0, 1, 2].forEach((k) => noise(0.05, { vol: 0.11, at: k * 0.12, hp: 3200 }))),
+      shuffle: () => play(() => { for (let k = 0; k < 9; k++) noise(0.04, { vol: 0.06, at: k * 0.06, hp: 2200 }); }),
+      turn: () => { play(() => tone(660, 0.12, { vol: 0.08 })); buzz(30); },
+      win: () => { play(() => notes([523, 659, 784, 1047], { dur: 0.3, gap: 0.13 })); buzz([80, 60, 80, 60, 220]); },
+      join: () => { play(() => notes([660, 880], { type: 'sine', dur: 0.28, gap: 0.13 })); buzz([60, 50, 60]); },
+    };
+  })();
+  function paintSound() {
+    const b = $('#btnSound');
+    if (!b) return;
+    const off = prefs.sound === false;
+    b.classList.toggle('muted', off);
+    b.setAttribute('aria-label', off ? 'Sound is off. Tap to turn it on' : 'Sound is on. Tap to mute');
+    b.innerHTML = `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5h3.5L12 5v14l-4.5-4.5H4z" fill="currentColor" stroke-width="1.6"/>${off
+      ? '<path d="M16 9.5l5 5M21 9.5l-5 5"/>' : '<path d="M15.5 9a4 4 0 0 1 0 6"/><path d="M18.3 6.5a7.5 7.5 0 0 1 0 11"/>'}</svg>`;
+  }
+
+  // ---------------- first-game tips ----------------
+  // The first time someone plays on this phone, short tips pop up at the right moments, once each.
+  // The phone remembers, so they never show again (How to play can bring them back).
+  const TIPS = {
+    flip: 'Tap <b>Flip</b> to draw a card. Every new number adds to your score.',
+    dup: 'Careful: flip a number you <b>already have</b> and you bust, losing this round\'s numbers.',
+    close: 'Happy with your points? Tap <b>Close</b> to bank them and sit out the rest of the round.',
+    action: 'Action card! <b>Chill</b> banks someone\'s points and stops their round. <b>Hat Trick</b> makes them take 3 cards. A <b>Lifeline</b> saves you from one bust.',
+  };
+  let tipShown = null;
+  function tip(key, anchor) {
+    prefs.tips = prefs.tips || {};
+    if (prefs.tipsOff || prefs.tips[key] || tipShown) return;
+    prefs.tips[key] = true;
+    store.set(PREFS, prefs);
+    const el = $('#tip');
+    tipShown = key;
+    el.innerHTML = `<div class="tip-txt">${TIPS[key]}</div><div class="tip-btns"><button type="button" class="tip-ok">Got it</button><button type="button" class="tip-skip">Skip tips</button></div>`;
+    const r = anchor ? anchor.getBoundingClientRect() : null;
+    el.style.top = '';
+    el.style.bottom = r ? `${Math.max(12, window.innerHeight - r.top + 10)}px` : '';
+    el.classList.toggle('mid', !r);
+    el.classList.add('show');
+    const done = () => { el.classList.remove('show'); tipShown = null; };
+    el.querySelector('.tip-ok').onclick = done;
+    el.querySelector('.tip-skip').onclick = () => { prefs.tipsOff = true; store.set(PREFS, prefs); done(); };
+    clearTimeout(tip.timer);
+    tip.timer = setTimeout(done, 9000);
+  }
+  const hideTip = () => { if (tipShown) { $('#tip').classList.remove('show'); tipShown = null; } };
+
   // ---------------- event playback ----------------
   async function play(ev) {
     const s = ev.snap;
@@ -601,12 +715,14 @@
         break;
       }
       case 'reshuffle':
+        sfx.shuffle();
         await shuffleAnim(s);
         break;
       case 'turn':
         render(s, ev.p);
         focusP = ev.p;
         if (ev.p !== lastTurnP) {
+          if (mode === 'local' || ev.p === mySeat) sfx.turn();
           if (mode === 'local') banner(s.players[ev.p].name, 'Your turn', pc(ev.p));
           else if (ev.p === mySeat) banner('Your turn', s.players[ev.p].name, pc(ev.p));
           else banner(s.players[ev.p].name, 'is up', pc(ev.p));
@@ -614,16 +730,21 @@
         }
         lastTurnP = ev.p;
         break;
-      case 'draw':
+      case 'draw': {
         focusP = ev.p;
         dealing = ev.deal;
         render(s, ev.p);
-        showReveal(ev.card);
-        await sleep(ev.deal ? 360 : 440);
+        // Flipping while holding 5 or 6 numbers: slow it down and let the heart pound.
+        const tense = !ev.deal && numsOf(s.players[ev.p]) >= 5;
+        showReveal(ev.card, tense);
+        if (tense) sfx.tense(); else sfx.flip();
+        await sleep(ev.deal ? 360 : tense ? 1150 : 440);
         break;
+      }
       case 'place':
         if (dealing) flyToChip(ev.card, ev.p); else hideReveal(true);
         render(s, ev.p, ev.card.id);
+        if (ev.card.kind === 'num') sfx.place(numsOf(s.players[ev.p])); else sfx.bonus();
         if (ev.card.kind === 'shield') toast(`${nm(ev.p)} is holding a Lifeline`);
         await sleep(ev.card.kind === 'num' ? 180 : 320);
         break;
@@ -632,6 +753,8 @@
         // pulses red under a BUST stamp.
         $('#reveal').classList.add('busting');
         flash('red');
+        sfx.bust();
+        shake();
         await sleep(340);
         shatterReveal();
         render(s, ev.p, ev.card.id);
@@ -645,6 +768,8 @@
         stamp('SAVED!', 'saved', 'Lifeline used up', ev.p);
         toast(`A Lifeline saved ${nm(ev.p)}`);
         flash('gold');
+        sfx.saved();
+        fx.burst(70, 0.45, ['#ffd23f', '#ffb020', '#fff4c2', '#fff']);
         await sleep(500);
         hideReveal(true);
         render(s, ev.p);
@@ -655,6 +780,7 @@
         render(s, ev.p, ev.card.id);
         stamp('CLEAN SWEEP!', 'sweep', '+15 bonus', ev.p);
         flash('gold'); fx.burst(200);
+        sfx.sweep();
         await sleep(1700);
         break;
       case 'setAside':
@@ -666,6 +792,7 @@
       case 'chooseTarget':
         // The picker that follows says once, clearly, who drew the card.
         await sleep(450);
+        tip('action', null);
         hideReveal(true);
         await sleep(160);
         break;
@@ -675,6 +802,7 @@
         render(s, ev.t);
         stamp('CHILLED', 'lock', null, ev.t);
         flash('ice');
+        sfx.chill();
         const pts = breakdown(s.players[ev.t]).score;
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take it. Chilled with ${pts}`
@@ -687,6 +815,7 @@
         focusP = ev.t;
         render(s, ev.t);
         stamp('HAT TRICK!', 'rush', '3 cards in a row', ev.t);
+        sfx.hat();
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take 3 cards!`
           : ev.t === ev.p ? `${nm(ev.t)} takes the Hat Trick: 3 cards in a row!` : `${nm(ev.p)} makes ${nm(ev.t)} take 3 cards!`, 2200);
@@ -708,6 +837,7 @@
         break;
       case 'stay':
         render(s, ev.p);
+        if (!ev.forced) sfx.bank();
         toast(ev.forced ? `Out of cards, so ${nm(ev.p)} closes` : `${nm(ev.p)} closes with <b>${breakdown(s.players[ev.p]).score}</b>`);
         await sleep(450);
         break;
@@ -762,6 +892,7 @@
     if (myMove && document.hidden) nudge(true); else if (!myMove) nudge(false);
     if (a.type === 'decide' && isMine(a.p)) {
       const n = numsOf(s.players[a.p]);
+      if (n >= 3) tip('close', $('#btnClose')); else if (n >= 2) tip('dup', $('#btnFlip')); else tip('flip', $('#btnFlip'));
       heart.set(n >= 6 ? 650 : n === 5 ? 900 : 0);
     } else heart.stop();
     waitNote('');
@@ -887,6 +1018,79 @@
     }, `picker ${a.action}`);
   }
 
+  // The winner's brag card: a square picture of the final scores with the game's link, sent
+  // through the phone's share sheet (or saved, where sharing pictures isn't supported).
+  function winCard(s) {
+    const W = 1080;
+    const c = document.createElement('canvas');
+    c.width = W; c.height = W;
+    const g = c.getContext('2d');
+    const font = getComputedStyle(document.body).fontFamily || 'system-ui, sans-serif';
+    const bg = g.createLinearGradient(0, 0, W, W);
+    bg.addColorStop(0, '#ff6b1a'); bg.addColorStop(0.55, '#ff3d81'); bg.addColorStop(1, '#6a5cf0');
+    g.fillStyle = bg; g.fillRect(0, 0, W, W);
+    g.fillStyle = 'rgba(255,255,255,.96)';
+    const card = (x, y, w, h, r) => { if (!g.roundRect) { g.fillRect(x, y, w, h); return; } g.beginPath(); g.roundRect(x, y, w, h, r); g.fill(); };
+    card(70, 70, W - 140, W - 140, 56);
+    g.textAlign = 'center';
+    g.fillStyle = '#1b2a3a';
+    g.font = `800 54px ${font}`;
+    g.fillText('Streak or Bust', W / 2, 175);
+    g.font = '120px serif';
+    g.fillText('🏆', W / 2, 330);
+    const win = s.players[s.winner];
+    g.fillStyle = pc(s.winner);
+    g.font = `900 92px ${font}`;
+    g.fillText(`${win.name} wins!`, W / 2, 455, W - 220);
+    const rows = s.players.map((pl, i) => ({ pl, i })).sort((a, b) => b.pl.total - a.pl.total);
+    let y = 560 + (4 - rows.length) * 52; // keep the rows centered for 2, 3, or 4 players
+    rows.forEach(({ pl, i }) => {
+      g.fillStyle = i === s.winner ? '#fff4d6' : '#f1f5f9';
+      card(170, y - 58, W - 340, 84, 24);
+      g.textAlign = 'left';
+      g.fillStyle = pc(i);
+      g.font = `800 46px ${font}`;
+      g.fillText(pl.name, 210, y, 520);
+      g.textAlign = 'right';
+      g.fillStyle = '#1b2a3a';
+      g.fillText(String(pl.total), W - 210, y);
+      y += 104;
+    });
+    g.textAlign = 'center';
+    g.fillStyle = '#5b6b7b';
+    g.font = `700 40px ${font}`;
+    g.fillText('Play free at streakorbust.com', W / 2, W - 120);
+    return new Promise((res) => c.toBlob(res, 'image/png'));
+  }
+  async function shareWin(s) {
+    const win = s.players[s.winner];
+    const others = s.players.filter((_, i) => i !== s.winner).sort((a, b) => b.total - a.total);
+    const vs = others.length === 1 ? ` ${win.total} to ${others[0].total}` : ` with ${win.total} points`;
+    const text = mode === 'local'
+      ? `${win.name} just won Streak or Bust${vs}! 🔥 Think you can beat that?`
+      : `I just won Streak or Bust${vs}! 🔥 Think you can beat me?`;
+    try {
+      const blob = await winCard(s);
+      const file = blob && new File([blob], 'streak-or-bust-win.png', { type: 'image/png' });
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], text: `${text} ${SITE_URL}` });
+        return;
+      }
+      if (navigator.share) { await navigator.share({ title: 'Streak or Bust', text, url: SITE_URL }); return; }
+      if (blob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'streak-or-bust-win.png';
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      }
+      try { await navigator.clipboard.writeText(`${text} ${SITE_URL}`); toast('Picture saved and message copied. Paste it to your friends!', 3200); } catch (e) { toast('Picture saved!', 2400); }
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+      toast("Couldn't share right now", 2400);
+    }
+  }
+
   function showSummary() {
     const s = game.s;
     const sum = s.summary;
@@ -938,10 +1142,15 @@
     else if (mode === 'local') btns = `<button class="btn primary big" id="mRematch">Rematch</button><button class="btn ghost" id="mNew">New players</button>`;
     else if (mode === 'host') btns = `<button class="btn primary big" id="mRematch">Rematch</button><button class="btn ghost" id="mLeave">End room</button>`;
     else btns = `<button class="btn primary big" disabled>Waiting for a rematch…</button><button class="btn ghost" id="mLeave">Leave room</button>`;
+    // Only the winner gets to brag: on a shared phone that's whoever won, online it's the winner's own phone.
+    const canBrag = over && (mode === 'local' || s.winner === mySeat);
+    if (canBrag) btns = `<button class="btn share-win" id="mShareWin">🏆 Share ${mode === 'local' ? `${esc(s.players[s.winner].name)}'s` : 'your'} win</button>` + btns;
     openModal(`${head}${momentHTML}<div class="sumrows">${rowsHTML}</div>${achHTML}<div class="mbtns">${btns}</div>`, (m) => {
       requestAnimationFrame(() => m.querySelectorAll('.bar i').forEach((i) => { i.style.width = i.dataset.w + '%'; }));
       countUp(m.querySelectorAll('.st'));
-      if (over) { fx.burst(260, 0.3); setTimeout(() => fx.burst(180, 0.35), 700); }
+      if (over) { fx.burst(260, 0.3); setTimeout(() => fx.burst(180, 0.35), 700); sfx.win(); }
+      const sw = m.querySelector('#mShareWin');
+      if (sw) sw.addEventListener('click', () => shareWin(s));
       const nx = m.querySelector('#mNext');
       if (nx) nx.addEventListener('click', () => { clearUndo(); closeModal(); act('next'); });
       const rm = m.querySelector('#mRematch');
@@ -1014,10 +1223,13 @@
       <li><b>Host leaving?</b> They can hand the game to the next player and everyone else keeps playing, or end it for everyone.</li>
       <li><b>Tapped Leave?</b> You're out right away, with no bot. Come back any time with the room code.</li>
       <li>It takes at least 2 players. If everyone else is out, the game pauses until someone's back.</li></ul>
-  </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button></div>`;
+  </div><div class="mbtns" style="margin-top:16px"><button class="btn primary" id="mOk">Got it</button><button class="btn ghost" id="mTipsAgain">Show the tips again in my next game</button></div>`;
 
   function showRules() {
-    openModal(RULES_HTML, (m) => m.querySelector('#mOk').addEventListener('click', backToTable), 'rules-sheet', backToTable);
+    openModal(RULES_HTML, (m) => {
+      m.querySelector('#mOk').addEventListener('click', backToTable);
+      m.querySelector('#mTipsAgain').addEventListener('click', () => { prefs.tips = {}; prefs.tipsOff = false; store.set(PREFS, prefs); toast("You'll see the tips again in your next game"); backToTable(); });
+    }, 'rules-sheet', backToTable);
   }
 
   function showMenu() {
@@ -1835,33 +2047,9 @@
   // ---------- join alerts ----------
   // Someone joins your room: a pop-up, a short chime, and a buzz (where phones allow it). If the
   // game is in the background, a notification too. Sound needs one tap on the page first.
-  let actx = null;
-  document.addEventListener('pointerdown', () => {
-    try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) { /* no sound */ }
-  });
-  function chime() {
-    try {
-      if (actx) {
-        const t0 = actx.currentTime;
-        [660, 880].forEach((f, k) => {
-          const o = actx.createOscillator();
-          const g = actx.createGain();
-          const at = t0 + k * 0.13;
-          o.frequency.value = f;
-          g.gain.setValueAtTime(0.0001, at);
-          g.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
-          g.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
-          o.connect(g).connect(actx.destination);
-          o.start(at);
-          o.stop(at + 0.3);
-        });
-      }
-    } catch (e) { /* no sound */ }
-    try { if (navigator.vibrate && (!navigator.userActivation || navigator.userActivation.hasBeenActive)) navigator.vibrate([60, 50, 60]); } catch (e) { /* no buzz */ }
-  }
   function joinAlert(name) {
     toast(`<b>${esc(name)}</b> joined!`, 2600);
-    chime();
+    sfx.join();
     if (mode === 'host' && document.hidden) showAlert(`${name} joined your room`, 'Tap to get the game going.');
   }
 
@@ -2394,6 +2582,9 @@
     }, '', closeModal);
   };
   $('#btnMenu').onclick = () => { showMenu(); };
+  $('#btnSound').onclick = () => { prefs.sound = prefs.sound === false; store.set(PREFS, prefs); paintSound(); if (prefs.sound) sfx.turn(); toast(prefs.sound ? 'Sound and buzz on' : 'Sound and buzz off', 1400); };
+  paintSound();
+  ['#btnFlip', '#btnClose', '#btnSkip'].forEach((q) => $(q).addEventListener('click', hideTip));
 
   const canAct = () => !busy && !pendingAct && game && game.s.awaiting && game.s.awaiting.type === 'decide' && isMine(game.s.awaiting.p) && (mode !== 'guest' || Net.connected);
   function doFlip() {
@@ -2465,6 +2656,7 @@
     window.__load = (state) => { mode = 'local'; mySeat = null; game = Game.load(state); lastTurnP = null; closeModal(); showScreen('table'); settle(); };
     window.__summary = () => showSummary();
     window.__state = () => (game ? JSON.parse(JSON.stringify(game.s)) : null);
+    window.__winCard = async () => URL.createObjectURL(await winCard(game.s));
     window.__picker = (action) => { const s = game.s; showTarget({ p: 0, action, card: { kind: action }, options: s.players.map((_, i) => i) }); };
     window.__shuffle = () => {
       // Demo with a realistic size: every card that isn't on the table right now.

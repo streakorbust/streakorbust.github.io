@@ -338,7 +338,9 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .topbar { position: relative; }
 .topbar { gap: 8px; }
 .topbar .tb-left { margin-left: auto; flex: none; white-space: nowrap; }
-#btnMenu { flex: none; }
+#btnMenu, #btnSound { flex: none; }
+#btnSound { display: grid; place-items: center; color: var(--ink2); }
+#btnSound.muted { color: var(--muted); }
 #turnPill { order: -1; flex: 0 1 auto; min-width: 0; padding: 6px 14px; border-radius: 999px;
   background: var(--pc); color: #fff; font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   box-shadow: 0 4px 14px color-mix(in srgb, var(--pc) 40%, transparent); }
@@ -809,3 +811,31 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #names .nameIn.new { animation: dropin .25s ease-out; }
 
 .rules .lead { margin: 0 0 12px; font-size: 16px; font-weight: 600; color: var(--ink) !important; line-height: 1.4; }
+
+/* ---------- big moments ---------- */
+#stage.shake { animation: tableShake .45s cubic-bezier(.36, .07, .19, .97); }
+@keyframes tableShake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-7px); }
+  40%, 60% { transform: translateX(7px); }
+}
+/* Flipping with a crowded hand: a slower, bigger reveal with a pulsing glow. */
+#reveal.tense .flipper { animation: flyflip 1s cubic-bezier(.2, .7, .2, 1) both; }
+#reveal.tense .flipper > .card:not(.back) { animation: tenseGlow .5s ease-in-out .5s 2 alternate; }
+@keyframes tenseGlow { from { box-shadow: var(--shadow-lg); } to { box-shadow: 0 0 0 4px rgba(255, 61, 129, .55), 0 0 38px rgba(255, 61, 129, .55); } }
+@media (prefers-reduced-motion: reduce) { #stage.shake { animation: none; } }
+
+/* ---------- first-game tips ---------- */
+#tip { position: fixed; left: 50%; bottom: 120px; z-index: 65; width: min(340px, calc(100vw - 32px)); transform: translate(-50%, 10px);
+  padding: 14px 16px 10px; border-radius: 18px; background: var(--ink); color: #fff; box-shadow: var(--shadow-lg);
+  font-size: 15px; line-height: 1.4; opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; }
+#tip.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+#tip.mid { bottom: auto !important; top: calc(var(--safe-t) + 16px); }
+#tip b { color: #ffd23f; }
+.tip-btns { display: flex; justify-content: space-between; margin-top: 8px; }
+.tip-btns button { background: none; border: 0; color: #fff; font: inherit; font-weight: 700; font-size: 14px; padding: 6px 4px; }
+.tip-btns .tip-skip { color: rgba(255, 255, 255, .6); font-weight: 600; }
+
+/* ---------- winner's share button ---------- */
+.btn.share-win { background: linear-gradient(135deg, #ffb020, #ff6b1a 55%, #ff3d81); color: #fff; font-weight: 800; box-shadow: 0 8px 22px rgba(255, 107, 26, .35); }
