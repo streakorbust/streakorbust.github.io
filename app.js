@@ -1242,6 +1242,16 @@
     }
   }
 
+  // The final screen must fit without scrolling, even on short screens: tighten it step by step
+  // (smaller spacing, then smaller text, then fewer badge details) until it fits.
+  function fitFinal(m) {
+    const fits = () => m.scrollHeight <= m.clientHeight + 1;
+    for (const level of ['tight', 'tighter', 'tightest']) {
+      if (fits()) return;
+      m.classList.add(level);
+    }
+  }
+
   function showSummary() {
     const s = game.s;
     const sum = s.summary;
@@ -1302,7 +1312,7 @@
       : `${head}${momentHTML}<div class="sumrows">${rowsHTML}</div>${achHTML}<div class="mbtns">${btns}</div>`, (m) => {
       requestAnimationFrame(() => m.querySelectorAll('.bar i').forEach((i) => { i.style.width = i.dataset.w + '%'; }));
       countUp(m.querySelectorAll('.st'));
-      if (over) { fx.burst(260, 0.3); setTimeout(() => fx.burst(180, 0.35), 700); sfx.win(); }
+      if (over) { fx.burst(260, 0.3); setTimeout(() => fx.burst(180, 0.35), 700); sfx.win(); fitFinal(m); }
       const sw = m.querySelector('#mShareWin');
       if (sw) sw.addEventListener('click', () => shareWin(s));
       const nx = m.querySelector('#mNext');

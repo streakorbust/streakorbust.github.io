@@ -880,3 +880,19 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #modal.results.final #mShareWin { min-height: 46px; }
 #modal.results.final #mRematch { min-height: 52px; }
 #modal.results.final #mNew, #modal.results.final #mLeave { min-height: 38px; font-size: 15px; border: 0; background: none; box-shadow: none; }
+/* Short screens: the final results tighten itself until everything fits (see fitFinal). */
+#modal.results.final.tight { padding-top: 8px; }
+#modal.results.final.tight .winner small { display: none; }
+#modal.results.final.tight .winner h2 { font-size: 23px !important; margin-top: 0 !important; }
+#modal.results.final.tight .sumrows { gap: 4px; margin: 6px 0; }
+#modal.results.final.tight .sumrow { padding: 4px 12px 5px 20px; }
+#modal.results.final.tight .sumrow .sn { font-size: 15px; }
+#modal.results.final.tight .sumrow .st { font-size: 21px; }
+#modal.results.final.tight .sumrow .bar { margin-top: 3px; height: 3px; }
+#modal.results.final.tight #mShareWin { min-height: 42px; }
+#modal.results.final.tight #mRematch { min-height: 46px; }
+#modal.results.final.tighter .winner p { display: none; }
+#modal.results.final.tighter h3 { display: none; }
+#modal.results.final.tighter .achflow { margin-bottom: 6px; }
+#modal.results.final.tighter .achchip { padding: 2px 7px; font-size: 11px; }
+#modal.results.final.tightest .achflow { display: none; }
