@@ -1981,7 +1981,7 @@
 
   const hostedByMe = (h) => !!h && (h.host ? h.host === myCid : !!(h.members && h.members[0] && h.members[0].cid === myCid));
   function saveHosted() {
-    if (mode !== 'host' || !game) return;
+    if (mode !== 'host' || !game || !Net.code) return; // never save a room without its code
     store.set(HOSTED, { code: Net.code, host: myCid, members: members.map(({ cid, name }) => ({ cid, name })), target: game.s.target, state: game.s, when: Date.now() });
   }
 
@@ -2347,6 +2347,7 @@
   }
 
   async function createRoom(reopen) {
+    if (reopen && !reopen.code) { store.del(HOSTED); renderOnlineHome(); return; } // can't reopen a room we don't know
     const name = reopen ? (reopen.members.find((m) => m.cid === myCid) || {}).name || myName() : myName();
     if (!name) return;
     const epoch = ++netEpoch;
@@ -2602,8 +2603,8 @@
     const hosted = store.get(HOSTED);
     const room = store.get(ROOM);
     let html = '';
-    const hostOk = hosted && hosted.state && hosted.state.phase !== 'over' && hostedByMe(hosted);
-    const lobbyOk = hosted && hosted.lobby && Date.now() - hosted.when < 12 * 3600e3;
+    const hostOk = hosted && hosted.code && hosted.state && hosted.state.phase !== 'over' && hostedByMe(hosted);
+    const lobbyOk = hosted && hosted.code && hosted.lobby && Date.now() - hosted.when < 12 * 3600e3;
     const roomOk = room && Date.now() - room.when < 12 * 3600e3;
     if (lobbyOk && !(roomOk && room.when > hosted.when)) {
       html = `<span class="rs-txt"><span class="rs-title">Reopen room ${esc(hosted.code)}</span><span class="rs-sub">Your friends can still join with this code</span></span>`;
