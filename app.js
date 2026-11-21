@@ -1196,12 +1196,20 @@
     // Footer: a challenge and the link.
     g.textAlign = 'center';
     g.fillStyle = '#fff'; g.font = `800 44px ${font}`;
-    g.fillText(mode === 'local' ? 'Think you can beat that?' : 'Think you can beat me?', W / 2, H - 120);
-    g.font = `700 32px ${font}`;
-    const link = 'Play free at streakorbust.com';
-    const lw = g.measureText(link).width + 64;
-    g.fillStyle = '#fff'; rr(W / 2 - lw / 2, H - 92, lw, 58, 29); g.fill();
-    g.fillStyle = '#7a1fa2'; g.fillText(link, W / 2, H - 52);
+    g.fillText(mode === 'local' ? 'Think you can beat that?' : 'Think you can beat me?', W / 2, H - 150);
+    // The link: big, bold, and dark on a white pill so it reads at a glance.
+    const a1 = 'Play free at ', a2 = 'streakorbust.com';
+    g.font = `700 40px ${font}`; const w1 = g.measureText(a1).width;
+    g.font = `900 44px ${font}`; const w2 = g.measureText(a2).width;
+    const lw = w1 + w2 + 80, ly = H - 118;
+    g.shadowColor = 'rgba(40, 0, 60, .35)'; g.shadowBlur = 24; g.shadowOffsetY = 8;
+    g.fillStyle = '#fff'; rr(W / 2 - lw / 2, ly, lw, 82, 41); g.fill();
+    g.shadowColor = 'transparent';
+    g.textAlign = 'left';
+    const x0 = W / 2 - (w1 + w2) / 2;
+    g.fillStyle = '#4a2a66'; g.font = `700 40px ${font}`; g.fillText(a1, x0, ly + 55);
+    g.fillStyle = '#2a0f5c'; g.font = `900 44px ${font}`; g.fillText(a2, x0 + w1, ly + 55);
+    g.textAlign = 'center';
 
     return new Promise((res) => c.toBlob(res, 'image/png'));
   }
