@@ -26,6 +26,9 @@
   const prefs = Object.assign({ names: [], count: 2, target: 200, myName: '', mode: 'local', cid: '' }, store.get(PREFS) || {});
   prefs.count = Math.min(prefs.count, MAX_PLAYERS);
   prefs.target = 200; // every visit starts at the standard 200; pick 100 or Custom per game
+  // Quick animations: every pause in the card animations is about half as long (the phone remembers).
+  const nap = (ms) => sleep(prefs.quick ? Math.round(ms * 0.5) : ms);
+  document.body.classList.toggle('quick', !!prefs.quick);
   const debug = /[?&]debug\b/.test(location.search);
   // This phone's id in online rooms, so a dropped player gets their seat back when they reconnect.
   // (?debug gives each tab its own id, to test a room with two tabs.)
@@ -380,7 +383,7 @@
       ], { duration: dur, delay: k * 20, easing: 'ease-in-out', fill: 'both' });
       c.lastElementChild.animate([{ opacity: 0, offset: 0 }, { opacity: 0, offset: 0.3 }, { opacity: 1, offset: 0.4 }, { opacity: 1 }], { duration: dur, delay: k * 20, fill: 'both' });
     });
-    await sleep(dur + 160);
+    await nap(dur + 160);
 
     // 4) the new deck drops into the Flip button, which refills with a sweep and a counting number.
     label.textContent = 'Cards shuffled!';
@@ -391,7 +394,7 @@
         { transform: `translate(${dx}px, ${dy}px) scale(.35)`, opacity: 0.2 },
       ], { duration: 520, delay: k * 45, easing: 'cubic-bezier(.5, 0, .3, 1)', fill: 'both' });
     });
-    await sleep(380);
+    await nap(380);
     flip.classList.add('refilling');
     const fill = document.createElement('i');
     fill.className = 'refill';
@@ -413,7 +416,7 @@
     flip.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.05)' }, { transform: 'scale(1)' }], { duration: 300, easing: 'ease-out' });
     box.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 250, fill: 'forwards' });
     fill.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: 'forwards' });
-    await sleep(420);
+    await nap(420);
     box.remove();
     fill.remove();
     flip.classList.remove('refilling');
@@ -785,7 +788,7 @@
         focusP = (ev.dealer + 1) % s.players.length;
         render(s, focusP);
         banner(`Round ${ev.round}`, `${s.players[ev.dealer].name} deals`, '#1677c9');
-        await sleep(750);
+        await nap(750);
         break;
       }
       case 'reshuffle':
@@ -800,7 +803,7 @@
           if (mode === 'local') banner(s.players[ev.p].name, 'Your turn', pc(ev.p));
           else if (ev.p === mySeat) banner('Your turn', s.players[ev.p].name, pc(ev.p));
           else banner(s.players[ev.p].name, 'is up', pc(ev.p));
-          await sleep(260);
+          await nap(260);
         }
         lastTurnP = ev.p;
         break;
@@ -813,7 +816,7 @@
         showReveal(ev.card, tense);
         if (tense) sfx.tense();
         else sfx.flip(ev.card.kind === 'num' ? numsOf(s.players[ev.p]) + 1 : 0);
-        await sleep(ev.deal ? 360 : tense ? 1150 : 440);
+        await nap(ev.deal ? 360 : tense ? 1150 : 440);
         break;
       }
       case 'place':
@@ -821,7 +824,7 @@
         render(s, ev.p, ev.card.id);
         if (ev.card.kind === 'num') sfx.place(numsOf(s.players[ev.p])); else sfx.bonus();
         if (ev.card.kind === 'shield') toast(`${nm(ev.p)} is holding a Lifeline`);
-        await sleep(ev.card.kind === 'num' ? 180 : 320);
+        await nap(ev.card.kind === 'num' ? 180 : 320);
         break;
       case 'bust': {
         // The duplicate swells and glows red, then splits and the halves drift apart; the hand
@@ -830,13 +833,13 @@
         flash('red');
         sfx.bust();
         shake();
-        await sleep(340);
+        await nap(340);
         shatterReveal();
         render(s, ev.p, ev.card.id);
         const seat = $(`#seats .seat[data-i="${ev.p}"]`);
         if (seat) seat.classList.add('busting');
         stamp('BUST!', 'bust', `Another ${ev.card.value}`, ev.p);
-        await sleep(850);
+        await nap(850);
         break;
       }
       case 'saved':
@@ -845,10 +848,10 @@
         flash('gold');
         sfx.saved();
         fx.burst(70, 0.45, ['#ffd23f', '#ffb020', '#fff4c2', '#fff']);
-        await sleep(500);
+        await nap(500);
         hideReveal(true);
         render(s, ev.p);
-        await sleep(450);
+        await nap(450);
         break;
       case 'sweep':
         hideReveal(true);
@@ -856,20 +859,20 @@
         stamp('CLEAN SWEEP!', 'sweep', '+15 bonus', ev.p);
         flash('gold'); fx.burst(200);
         sfx.sweep();
-        await sleep(1700);
+        await nap(1700);
         break;
       case 'setAside':
         toast(`${ACTION_NAME[ev.card.kind]} waits until these 3 cards are done`);
-        await sleep(550);
+        await nap(550);
         hideReveal(true);
-        await sleep(180);
+        await nap(180);
         break;
       case 'chooseTarget':
         // The picker that follows says once, clearly, who drew the card.
-        await sleep(450);
+        await nap(450);
         tip('action', null);
         hideReveal(true);
-        await sleep(160);
+        await nap(160);
         break;
       case 'lock': {
         hideReveal(true);
@@ -882,7 +885,7 @@
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take it. Chilled with ${pts}`
           : ev.t === ev.p ? `${nm(ev.t)} chilled themselves with ${pts}` : `${nm(ev.p)} chilled ${nm(ev.t)}, who keeps ${pts}`, 2400);
-        await sleep(1050);
+        await nap(1050);
         break;
       }
       case 'rush':
@@ -894,41 +897,41 @@
         toast(ev.auto && ev.t === ev.p
           ? `${nm(ev.t)} is the only one left and has to take 3 cards!`
           : ev.t === ev.p ? `${nm(ev.t)} takes the Hat Trick: 3 cards in a row!` : `${nm(ev.p)} makes ${nm(ev.t)} take 3 cards!`, 2200);
-        await sleep(1000);
+        await nap(1000);
         break;
       case 'rushDone':
-        await sleep(100);
+        await nap(100);
         break;
       case 'giveShield':
         hideReveal(true);
         render(s, ev.t, ev.card.id);
         toast(`${nm(ev.p)} already had one, so ${nm(ev.t)} gets the Lifeline`, 2200);
-        await sleep(750);
+        await nap(750);
         break;
       case 'discardAction':
         hideReveal(true);
         toast(ev.extra ? `${nm(ev.p)} already has a Lifeline, so the extra one is discarded` : `Nobody can take the ${ACTION_NAME[ev.card.kind]}, so it's discarded`);
-        await sleep(700);
+        await nap(700);
         break;
       case 'stay':
         render(s, ev.p);
         if (!ev.forced) sfx.bank();
         toast(ev.forced ? `Out of cards, so ${nm(ev.p)} closes` : `${nm(ev.p)} closes with <b>${breakdown(s.players[ev.p]).score}</b>`);
-        await sleep(450);
+        await nap(450);
         break;
       case 'skip':
         render(s, ev.p);
         toast(`${nm(ev.p)} skips this turn`);
-        await sleep(400);
+        await nap(400);
         break;
       case 'leave':
         render(s, focusP);
-        await sleep(300);
+        await nap(300);
         break;
       case 'roundEnd':
         hideReveal(false);
         render(s, focusP);
-        await sleep(320);
+        await nap(320);
         break;
     }
   }
@@ -1396,16 +1399,33 @@
     }, 'rules-sheet', backToTable);
   }
 
+  // The Quick animations switch, shown in the game menu.
+  const quickBtn = () => `<button class="btn ghost quick-toggle" id="mQuick" type="button" role="switch" aria-checked="${!!prefs.quick}"><span>⚡ Quick animations</span><span class="qt-pill ${prefs.quick ? 'on' : ''}"><i></i></span></button>`;
+  function bindQuick(m) {
+    const b = m.querySelector('#mQuick');
+    if (!b) return;
+    b.onclick = () => {
+      prefs.quick = !prefs.quick;
+      store.set(PREFS, prefs);
+      document.body.classList.toggle('quick', prefs.quick);
+      b.setAttribute('aria-checked', String(prefs.quick));
+      b.querySelector('.qt-pill').classList.toggle('on', prefs.quick);
+      toast(prefs.quick ? 'Quick animations on' : 'Quick animations off', 1400);
+    };
+  }
+
   function showMenu() {
     heart.stop();
     if (mode !== 'local') { showRoomMenu(); return; }
     openModal(`<h2>Menu</h2><div class="menu-list">
       <button class="btn ghost" id="mRules">How to play</button>
+      ${quickBtn()}
       <button class="btn ghost" id="mShare">Share this game</button>
       <button class="btn ghost" id="mHome">Main menu (game is saved)</button>
       <button class="btn ghost" id="mEnd" style="color:var(--bad)">End this game</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
       m.querySelector('#mRules').onclick = showRules;
+      bindQuick(m);
       m.querySelector('#mShare').onclick = shareApp;
       m.querySelector('#mHome').onclick = () => { closeModal(); showSetup(); };
       m.querySelector('#mEnd').onclick = () => {
@@ -2535,10 +2555,12 @@
     openModal(`<h2>Room ${esc(Net.code || '')}</h2><div class="menu-list">
       ${coverBtn}
       <button class="btn ghost" id="mRules">How to play</button>
+      ${quickBtn()}
       <button class="btn ghost" id="mShare">Share this game</button>
       <button class="btn ghost" id="mLeave" style="color:var(--bad)">Leave the game</button>
       <button class="btn primary" id="mBack">Back to the table</button></div>`, (m) => {
       m.querySelector('#mRules').onclick = showRules;
+      bindQuick(m);
       m.querySelector('#mShare').onclick = shareApp;
       const cb = m.querySelector('#mCover');
       if (cb) cb.onclick = () => { closeModal(); hostCover(); };

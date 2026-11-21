@@ -896,3 +896,18 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 #modal.results.final.tighter .achflow { margin-bottom: 6px; }
 #modal.results.final.tighter .achchip { padding: 2px 7px; font-size: 11px; }
 #modal.results.final.tightest .achflow { display: none; }
+
+/* ---------- quick animations (⚡ in the game menu) ---------- */
+body.quick #reveal .flipper { animation-duration: .2s; }
+body.quick #reveal.out .flipper { animation-duration: .16s; }
+body.quick #reveal.tense .flipper { animation-duration: .55s; }
+body.quick #reveal.busting .flipper > .card:not(.back) { animation-duration: .24s; }
+body.quick #stamp.show, body.quick #stamp.bust.show { animation-duration: .75s; }
+body.quick #banner.show { animation-duration: .55s; }
+body.quick .seat-cards .card.new, body.quick .seat-extras .card.new { animation-duration: .16s; }
+body.quick .seat.busting { animation-duration: .55s; }
+.quick-toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.qt-pill { flex: none; width: 46px; height: 28px; border-radius: 999px; background: var(--line2, #cfd9e3); position: relative; transition: background .2s; }
+.qt-pill i { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.25); transition: transform .2s; }
+.qt-pill.on { background: #2fa84f; }
+.qt-pill.on i { transform: translateX(18px); }
